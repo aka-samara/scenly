@@ -8,9 +8,9 @@ import { callJson } from './gateway.js';
 import { UserError } from './generate.js';
 import { usdToCredits } from './credits.js';
 
-const MODELS = () => String(process.env.VOICE_MODELS || 'mimo-v2.6-flash,gemini-3.1-flash-lite').split(',').map((s) => s.trim()).filter(Boolean);
+const MODELS = () => String(process.env.VOICE_MODELS || 'gemini-3.1-flash-lite,mimo-v2.6-flash').split(',').map((s) => s.trim()).filter(Boolean);
 const LANGS = { en: 'English', ar: 'Arabic', ckb: 'Kurdish (Sorani)', ku: 'Kurdish (Kurmanji)', tr: 'Turkish', fa: 'Persian', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', pt: 'Portuguese', ru: 'Russian', hi: 'Hindi', ur: 'Urdu', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', nl: 'Dutch', sv: 'Swedish', pl: 'Polish', id: 'Indonesian' };
-const HEDGE_MS = 2500, LIMIT_MS = 52000, MAX_BYTES = 2 * 1024 * 1024;
+const HEDGE_MS = 1500, LIMIT_MS = 52000, MAX_BYTES = 2 * 1024 * 1024;
 
 // Models sometimes wrap the words in quotes or a label, or describe silence instead of staying quiet.
 function tidy(t) {

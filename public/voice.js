@@ -132,13 +132,14 @@ const micMessage = (e) => {
 
 // ---------- engine 1: the browser's speech recognition ----------
 function runSpeech(s) {
-  let rec = null, gotResult = false, began = 0, quick = 0, fatal = null, restart = null, watchdog = null, everStarted = false;
+  let rec = null, gotResult = false, began = 0, quick = 0, fatal = null, restart = null, watchdog = null, everStarted = false, netFails = 0;
   const android = /Android/i.test(navigator.userAgent);
   const commit = () => { const t = (s.live + (s.interim ? ' ' + s.interim : '')).slice(s.liveSkip).trim(); if (t) s.parts.push({ text: t }); s.live = ''; s.liveSkip = 0; s.interim = ''; };
-  const toRecorder = () => {
+  const toRecorder = (remember = true) => {
     clearTimeout(watchdog); clearTimeout(restart);
     // This browser has the feature but its speech service refuses (blocked, offline, or switched off).
-    session.set('pm-voice-engine', 'record'); commit(); write(s);
+    // A passing network hiccup is not remembered: the next click tries the fast live engine again.
+    if (remember) session.set('pm-voice-engine', 'record'); commit(); write(s);
     s.halt = null; s.abort = null;
     if (s.finishing) return end(s);
     runRecorder(s);
@@ -171,7 +172,9 @@ function runSpeech(s) {
       if (s.finishing) return end(s);
       if (fatal === 'not-allowed') return fail(s, micMessage({ name: 'NotAllowedError' }));
       if (fatal === 'audio-capture') return fail(s, micMessage({ name: 'NotFoundError' }));
-      if (fatal) return toRecorder();   // network, service-not-allowed, language-not-supported…
+      if (fatal === 'network' && gotResult) netFails = 0;
+      if (fatal === 'network' && ++netFails <= 2) { restart = setTimeout(begin, 600); return; }   // a short drop: keep the live engine
+      if (fatal) return toRecorder(fatal !== 'network');   // service-not-allowed, language-not-supported, or a network that keeps failing
       quick = !gotResult && Date.now() - began < 1500 ? quick + 1 : 0;
       if (quick >= 3) return toRecorder();
       restart = setTimeout(begin, 250);   // the engines stop after a pause; keep listening until the person is done
@@ -276,7 +279,7 @@ async function runRecorder(s) {
     if (voice) seg.lastVoiceAt = dur;
     const pause = dur - seg.lastVoiceAt;
     // Whole sentences transcribe better than fragments: cut at the end of an utterance, or at a breath once the part is long.
-    if ((pause >= 1.6 && seg.voiced >= 0.3) || (dur >= 4 && pause >= 0.8) || (dur >= 8 && pause >= 0.3) || dur >= 12) cut();
+    if ((pause >= 1.0 && seg.voiced >= 0.3) || (dur >= 4 && pause >= 0.8) || (dur >= 8 && pause >= 0.3) || dur >= 12) cut();
   };
 
   src = ctx.createMediaStreamSource(stream); mute = ctx.createGain(); mute.gain.value = 0;
