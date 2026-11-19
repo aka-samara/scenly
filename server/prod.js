@@ -80,7 +80,7 @@ export function checkSettings() {
   if (!/^https:\/\//.test(e.PUBLIC_URL || '')) warn.push('PUBLIC_URL should be your https address, for example https://scenly.ai.');
   if (!e.LINK_SECRET || e.LINK_SECRET.length < 32) warn.push('LINK_SECRET should be a long random text (32+ characters). Download links are signed with it.');
   if (!e.ADMIN_EMAILS) warn.push('ADMIN_EMAILS is empty: nobody can open the admin page.');
-  if (!e.SMTP_HOST) warn.push('SMTP_HOST is empty: sign-up confirmation and password reset emails are off.');
+  if (!e.SMTP_HOST && !e.MANDRILL_API_KEY) warn.push('No email sender (MANDRILL_API_KEY or SMTP_HOST): sign-up confirmation and password reset emails are off.');
   if (!bucketOn()) warn.push('No R2 bucket is set: files stay only on this server and are not backed up.');
   if (e.STRIPE_SECRET_KEY && /^sk_test_/.test(e.STRIPE_SECRET_KEY)) warn.push('Stripe is in TEST mode: nobody is really charged.');
   if (!e.STRIPE_SECRET_KEY) warn.push('No Stripe key: purchases run in demo mode and give credits for free.');
