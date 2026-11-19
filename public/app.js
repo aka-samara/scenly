@@ -204,7 +204,9 @@ const creditPct = () => { const plan = S.config?.plans.find((p) => p.id === S.us
 
 // ---------- markdown ----------
 marked.setOptions({ gfm: true, breaks: false });
-function renderMd(text) {
+// opts.embed: show a full web page (or SVG) inline as a live, sandboxed preview with its code behind a toggle.
+// opts.streaming: the answer is still arriving, so a page being written shows as a small "Writing…" card.
+function renderMd(text, opts = {}) {
   const html = DOMPurify.sanitize(marked.parse(text || ''), { ADD_ATTR: ['target'] });
   const wrap = h('div', { class: 'md', html });
   wrap.querySelectorAll('pre > code').forEach((code) => {
@@ -216,6 +218,19 @@ function renderMd(text) {
     const page = (/^html?$/i.test(lang) || (!lang && /^\s*(<!doctype html|<html[\s>])/i.test(src)) || lang === 'svg' || /^\s*<svg[\s>]/i.test(src)) && src.trim().length > 40 && extractHtml('```' + (lang || 'html') + '\n' + src + '\n```');
     const pv = page && h('button', { class: 'btn ghost sm', onclick: () => openCanvas(page) }, icon('eye'), 'Preview');
     const box = h('div', { class: 'code' }, h('div', { class: 'code-head' }, h('span', {}, lang || 'code'), h('span', { style: { display: 'flex', gap: '2px' } }, pv, btn)));
+    if (opts.embed && page && (page.kind === 'svg' || /<!doctype html|<html[\s>]|<body[\s>]/i.test(src))) {
+      if (opts.streaming) { pre.replaceWith(h('div', { class: 'art-card pv-writing' }, h('div', { class: 'art-ic' }, icon('globe')), h('div', { class: 'art-txt' }, h('b', {}, h('span', { class: 'spin' }), ' Writing web page…'), h('small', {}, `${src.split('\n').length} lines so far · preview appears when it is done`)))); return; }
+      box.hidden = true;
+      const tog = h('button', { class: 'btn ghost sm', 'aria-expanded': 'false', onclick: () => { box.hidden = !box.hidden; tog.setAttribute('aria-expanded', String(!box.hidden)); tog.lastChild.textContent = box.hidden ? 'Show code' : 'Hide code'; } }, icon('code'), h('span', {}, 'Show code'));
+      const frame = previewFrame(page.html); frame.loading = 'lazy';
+      pre.replaceWith(h('div', { class: 'pv-embed' },
+        h('div', { class: 'pv-embed-head' }, h('span', { class: 'pv-embed-title', title: page.title }, icon(page.kind === 'svg' ? 'image' : 'globe'), page.title), h('span', { class: 'pv-embed-acts' }, tog,
+          h('button', { class: 'icon-btn sm', title: 'Open large preview', onclick: () => openCanvas(page) }, icon('expand')),
+          h('button', { class: 'icon-btn sm', title: 'Download .html', onclick: () => downloadBlob(new Blob([page.html], { type: 'text/html' }), fileSlug(page.title) + '.html') }, icon('dl')))),
+        h('div', { class: 'pv-embed-frame' + (page.kind === 'svg' ? ' svg' : '') }, frame), box));
+      box.append(pre);
+      return;
+    }
     pre.replaceWith(box); box.append(pre);
   });
   wrap.querySelectorAll('a').forEach((a) => { a.target = '_blank'; a.rel = 'noopener'; });
@@ -2787,8 +2802,9 @@ function renderMessage(msg, isLast) {
       h('div', { class: 'over' }, x.type !== 'video' && h('button', { class: 'icon-btn sm', title: 'Animate', onclick: () => useAsReference(x, 'video') }, icon('play')), h('a', { class: 'icon-btn sm', href: x.url, download: '', title: 'Download' }, icon('dl')))))));
     if (msg.status === 'pending') body.append(h('div', { class: 'gen-card' }, h('div', { class: 'shimmer' }), h('div', {}, h('b', {}, h('span', { class: 'spin' }), ' Generating video…'), h('small', {}, `${msg.params?.resolution || ''} · ${msg.params?.ratio || ''} · ${msg.params?.duration > 0 ? msg.params.duration + 's' : 'auto'}. Usually 1 to 5 minutes; you can leave this page.`), msg.progress && h('small', {}, 'Status: ' + msg.progress))));
   }
-  if (msg.content) body.append(renderMd(msg.content));
-  const page = msg.mode === 'chat' && extractHtml(msg.content);
+  const embed = msg.mode === 'chat' && !askedForCode(msg);
+  if (msg.content) body.append(renderMd(msg.content, { embed }));
+  const page = msg.mode === 'chat' && !body.querySelector('.pv-embed') && extractHtml(msg.content);
   if (page) body.append(previewCard(page));
   if (msg.mode === 'chat' && msg.fileKind && msg.content && !msg.error) body.append(fileCard(msg));
   if (msg.doc) body.append(...[Docs.docCard(msg)].flat());
@@ -2803,6 +2819,14 @@ function renderMessage(msg, isLast) {
     body,
     h('div', { class: 'msg-actions' }, copyBtn, dlBtn, regen, h('span', { class: 'spacer' }), msg.credits != null && h('span', { title: 'Credits used' }, `${fmtCredits(msg.credits)} credits`)),
   );
+}
+// True when the person's question asked for the code itself, so a web page in the answer stays as code.
+const CODE_ASK = /\b(code|coding|html|css|javascript|js|source|markup|snippet|script|syntax)\b/i;
+function askedForCode(msg) {
+  const list = S.conv?.messages || [];
+  let i = list.findIndex((x) => x.id === msg.id); if (i < 0) i = list.length;
+  for (let j = i - 1; j >= 0; j--) if (list[j].role === 'user') return CODE_ASK.test(list[j].content || '');
+  return false;
 }
 function thinkingBlock(text, open) {
   return h('details', { class: 'thinking', open }, h('summary', {}, icon('brain'), 'Thinking'), h('div', { class: 'body' }, text));
@@ -2903,7 +2927,7 @@ async function streamChat({ text, fileIds, regenerate }) {
     if (!JOBS.has(job)) return;
     if (reasoning && !thinkEl) { thinkEl = thinkingBlock('', true); body.prepend(thinkEl); }
     if (thinkEl) { const b = thinkEl.querySelector('.body'); b.textContent = reasoning; b.scrollTop = b.scrollHeight; if (content) thinkEl.open = false; }
-    if (content) contentWrap.replaceChildren(renderMd(content));
+    if (content) contentWrap.replaceChildren(renderMd(content, { embed: !CODE_ASK.test(text || ''), streaming: true }));
     if (shown() && S.follow) toBottom();
   };
   // Hidden browser tabs pause animation frames, so a timer keeps the text moving there too.
@@ -2946,8 +2970,9 @@ async function streamChat({ text, fileIds, regenerate }) {
           JOBS.delete(job);
           if (data.conversation) noteConv(data.conversation);
           if (vis) {
-            aiEl.replaceWith(renderMessage(data.message, true));
-            const page = extractHtml(data.message.content);
+            const done = renderMessage(data.message, true);
+            aiEl.replaceWith(done);
+            const page = !done.querySelector('.pv-embed') && extractHtml(data.message.content);
             if (page && !matchMedia('(max-width: 1000px)').matches) openCanvas(page);
             Docs.afterDocReply(data);
             if (S.follow) toBottom();
