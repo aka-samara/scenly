@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import { scaleCredits, CREDIT_SCALE } from './creditscale.js';
 import './handover.js'; // waits here, during a deploy, until the old copy of the app has saved and let go
 
@@ -64,8 +65,15 @@ export function ownsDb() {
 }
 // Written whole (temp file, then rename), so a starting copy never reads a half-written file.
 const writeWhole = (f, text) => { fs.writeFileSync(f + '.tmp', text); fs.renameSync(f + '.tmp', f); };
-const beat = () => { try { if (!lostOwner) writeWhole(ALIVE_FILE, `${OWNER} ${Date.now()}`); } catch { /* next beat */ } };
+// The heartbeat also says where this copy can be reached, so a new copy that is waiting can pass requests on to it
+// (server/handover.js) instead of holding them; "stopping" once shutdown has begun and new connections are refused.
+const myIp = () => Object.values(os.networkInterfaces()).flat().find((n) => n && n.family === 'IPv4' && !n.internal)?.address || '127.0.0.1';
+const ADDR = `${myIp()}:${Number(process.env.PORT || 3000)}`;
+let stopping = false;
+const beat = () => { try { if (!lostOwner) writeWhole(ALIVE_FILE, `${OWNER} ${Date.now()} ${stopping ? 'stopping' : ADDR}`); } catch { /* next beat */ } };
 beat(); setInterval(beat, 2000).unref?.();
+/** Shutdown has begun: a waiting new copy holds requests from now on rather than passing them here. */
+export function markStopping() { stopping = true; beat(); }
 /** Last save on shutdown, then let a waiting new copy take the data folder. */
 export function releaseDb() {
   if (!ownsDb()) return;

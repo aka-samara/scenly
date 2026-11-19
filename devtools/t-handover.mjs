@@ -19,11 +19,15 @@ const B = start('B', 3302);
 const hb = await up(3302); check(hb.starting === true, 'new copy is healthy at once but waits (healthz says starting)');
 const late = await reg(3301, 'late@t.local'); // the case from the bug: a sign-in on the old copy during the deploy
 check((await me(3301, late)) === 200, 'old copy still serves people during the deploy');
-const t0 = Date.now(); const heldReq = me(3302, late); // arrives at the new copy while it waits
+// While the new copy waits, requests that reach it are passed on to the old copy: answered at once, nothing lost.
+let t0 = Date.now(); const passed = await me(3302, late);
+check(passed === 200 && Date.now() - t0 < 1500, `request to the waiting new copy is passed to the old one, no pause (${passed}, ${Date.now() - t0} ms)`);
+const viaNew = await reg(3302, 'vianew@t.local'); // a sign-up made through the new copy before it took over
 await sleep(1500);
 A.kill('SIGTERM');
-const heldStatus = await heldReq;
-check(heldStatus === 200, `request held by the new copy is answered after hand-over, signed in (${heldStatus}, ${Date.now() - t0} ms)`);
+t0 = Date.now(); const heldStatus = await me(3302, late);
+check(heldStatus === 200, `request during the switch is answered after hand-over, signed in (${heldStatus}, ${Date.now() - t0} ms)`);
+check((await me(3302, viaNew)) === 200, 'sign-up passed through the new copy while it waited is kept');
 check((await me(3302, early)) === 200, 'sign-in from before the deploy still works on the new copy');
 check((await me(3302, late)) === 200, 'sign-in made on the old copy during the deploy works on the new copy');
 await sleep(300);
