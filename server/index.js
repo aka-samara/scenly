@@ -75,6 +75,8 @@ app.use('/vendor/hljs-light.css', express.static(path.join(nm, '@highlightjs/cdn
 app.use('/vendor/hljs-dark.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github-dark.min.css')));
 app.use('/vendor/builder-plan.js', express.static(path.join(here, 'builder', 'plan.js'))); // the same timeline maths in the browser and on the server
 app.use(express.static(path.join(here, '..', 'public')));
+// Plain links for app stores and sign-in providers (Google OAuth branding): /privacy and /terms open the legal pages.
+for (const k of ['privacy', 'terms']) app.get('/' + k, (req, res) => res.redirect(302, '/#/' + k));
 
 // ---------- helpers ----------
 const wrap = (fn) => (req, res) => Promise.resolve(fn(req, res)).catch((e) => {
