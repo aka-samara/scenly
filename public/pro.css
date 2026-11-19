@@ -303,3 +303,8 @@
   .pa-start h1 { font-size: 26px; }
   .pa-copy-row { grid-template-columns: 1fr auto; } .pa-copy-row > span { grid-column: 1 / -1; }
 }
+/* Voice input: the microphone in the prompt boxes, and its status line on a row of its own. */
+.pro-ask:has(> .voice-strip) { flex-wrap: wrap; }
+.pro-ask > .voice-strip { flex: 0 0 100%; margin-bottom: 0; }
+.pt-prompt-head { display: flex; align-items: center; justify-content: space-between; margin: -4px -4px -4px 0; }
+.pt-prompt > .voice-strip { margin-bottom: 0; padding-bottom: 8px; }
