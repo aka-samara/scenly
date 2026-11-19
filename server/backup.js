@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import db, { DATA_DIR } from './db.js';
+import db, { DATA_DIR, ownsDb } from './db.js';
 import { bucketConfig, putObject, listObjects, deleteObject } from './objectstore.js';
 
 const LOCAL = path.join(DATA_DIR, 'backups');
@@ -18,6 +18,7 @@ export async function backupNow({ when = new Date() } = {}) {
   const buf = snapshot(); const day = when.toISOString().slice(0, 10); const hour = when.toISOString().slice(11, 13);
   const cfg = bucketConfig();
   // Never let a brand-new, empty install (or one waiting for a restore) overwrite the bucket's real backups.
+  if (!ownsDb()) return true; // an older copy of the app that is shutting down
   if (cfg && (!(db.users || []).length || fs.existsSync(path.join(DATA_DIR, 'db.json.restore')))) {
     state.skipped = when.toISOString(); return true;
   }

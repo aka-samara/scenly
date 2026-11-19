@@ -46,7 +46,21 @@ const SAVE_MS = Math.max(50, Number(process.env.DB_SAVE_MS) || 150);
 // Health of saving, shown on /healthz and the admin health page.
 export const saveState = { ok: true, error: null, bytes: 0, at: null };
 let timer = null; let writing = false; let again = false; let lastSave = 0; let syncSaves = 0;
+// One writer only. During a rolling deploy the old and new app run side by side on the same data folder for a
+// moment; the old one must not save its (older) copy over the file the new one just loaded. Each start claims the
+// folder with a fresh token, and an app that no longer holds the token stops writing the database.
+const OWNER_FILE = path.join(path.dirname(DB_FILE), '.db-owner');
+const OWNER = crypto.randomBytes(12).toString('hex');
+fs.writeFileSync(OWNER_FILE, OWNER);
+let lostOwner = false;
+export function ownsDb() {
+  if (lostOwner) return false;
+  let cur = null; try { cur = fs.readFileSync(OWNER_FILE, 'utf8').trim(); } catch { return true; }
+  if (cur && cur !== OWNER) { lostOwner = true; console.warn('[db] a newer copy of the app took over this data folder; this copy stops saving.'); return false; }
+  return true;
+}
 function writeSync() {
+  if (!ownsDb()) return;
   syncSaves++; // a background write that started earlier must not replace this newer file
   const tmp = DB_FILE + '.tmp-now';
   fs.writeFileSync(tmp, JSON.stringify(db));
@@ -55,6 +69,7 @@ function writeSync() {
 async function flush() {
   timer = null;
   if (writing) { again = true; return; }
+  if (!ownsDb()) return;
   writing = true; lastSave = Date.now(); const mark = syncSaves;
   try {
     const tmp = DB_FILE + '.tmp';
@@ -75,6 +90,9 @@ export function saveNow() {
   writeSync();
 }
 process.on('exit', () => { if (timer || writing) writeSync(); });
+// An older copy of the app (one without the owner check) may still save once while it shuts down during a deploy.
+// Writing this copy's database again a little later puts the right file back.
+for (const ms of [75e3, 150e3]) setTimeout(() => { try { writeSync(); } catch (e) { console.error('[db] save failed:', e.message); } }, ms).unref?.();
 
 export const id = (p = '') => p + crypto.randomBytes(9).toString('base64url');
 export const now = () => new Date().toISOString();
