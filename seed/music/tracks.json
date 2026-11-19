@@ -1,0 +1,5 @@
+[
+  { "file": "track-30s.mp3", "title": "Sample track 1", "mood": "Upbeat", "genre": "", "bpm": 0, "duration": 30.12, "licence": "Supplied by the app owner. Confirm the licence before launch." },
+  { "file": "track-19s.mp3", "title": "Sample track 2", "mood": "Corporate", "genre": "", "bpm": 0, "duration": 18.94, "licence": "Supplied by the app owner. Confirm the licence before launch." },
+  { "file": "track-15s.mp3", "title": "Sample track 3", "mood": "Chill", "genre": "", "bpm": 0, "duration": 15.08, "licence": "Supplied by the app owner (file is tagged Jukedeck). Confirm the licence before launch." }
+]

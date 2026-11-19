@@ -1,0 +1,58 @@
+/* Prompt enhancer (enhance.js): the sparkle button on every prompt box and its status line. */
+.enh-host { position: relative; }
+textarea.enh-pad { padding-right: 38px !important; }
+
+.enh-btn { color: var(--muted); }
+.enh-btn.corner { position: absolute; z-index: 3; width: 28px; height: 28px; display: grid; place-items: center; padding: 0;
+  border-radius: 8px; border: 1px solid transparent; background: transparent; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+.enh-btn.corner:hover { background: rgb(var(--ink) / .08); color: var(--text); }
+.enh-btn svg { width: 16px; height: 16px; }
+.enh-btn.on { color: var(--accent); }
+.enh-btn.corner.on { background: rgb(67 97 238 / .14); border-color: rgb(67 97 238 / .35); }
+.enh-btn.busy { color: var(--accent); cursor: progress; }
+.enh-btn[hidden] { display: none; }
+.enh-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: enh-rot .8s linear infinite; }
+@keyframes enh-rot { to { transform: rotate(360deg); } }
+
+/* While it works the box shimmers softly and cannot be typed in. */
+textarea.enh-busy { cursor: progress; color: var(--muted) !important;
+  background-image: linear-gradient(100deg, transparent 20%, rgb(67 97 238 / .10) 45%, rgb(67 97 238 / .16) 50%, rgb(67 97 238 / .10) 55%, transparent 80%) !important;
+  background-size: 250% 100% !important; background-repeat: no-repeat !important; animation: enh-shimmer 1.4s linear infinite; }
+@keyframes enh-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+
+/* The status line, styled like voice input's strip so the two feel like one family. */
+.enh-strip { display: flex; align-items: center; gap: 8px; padding: 2px 2px 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line);
+  font-size: 13px; color: var(--muted); min-height: 26px; transition: opacity .4s; animation: enh-in .16s ease-out; }
+.enh-strip .grow { flex: 1; }
+.enh-ic { display: grid; place-items: center; color: var(--accent); flex: none; }
+.enh-ic svg { width: 15px; height: 15px; }
+.enh-strip.busy .enh-ic { animation: enh-pulse 1.2s ease-in-out infinite; }
+.enh-label { color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.enh-acts { display: flex; align-items: center; gap: 2px; flex: none; }
+.enh-link { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 7px; font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--accent); background: transparent; border: 0; cursor: pointer; }
+.enh-link:hover { background: rgb(67 97 238 / .12); }
+.enh-link svg { width: 14px; height: 14px; }
+.enh-x { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; color: var(--faint); background: transparent; border: 0; cursor: pointer; }
+.enh-x:hover { background: rgb(var(--ink) / .08); color: var(--text); }
+.enh-x svg { width: 13px; height: 13px; }
+.enh-strip.quiet { opacity: .6; }
+.enh-strip.quiet:hover { opacity: 1; }
+/* Outside a prompt bar the line is a small pill above the box. */
+:not(.bar):not(.va-box) > .enh-strip { border: 1px solid var(--line); border-radius: 10px; padding: 3px 6px 3px 10px; margin-bottom: 6px; background: var(--panel-3); }
+@keyframes enh-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@keyframes enh-pulse { 50% { opacity: .35; transform: scale(.85); } }
+
+@media (hover: none), (max-width: 640px) {
+  .enh-btn.corner { width: 32px; height: 32px; }
+  textarea.enh-pad { padding-right: 42px !important; }
+  .enh-link { padding: 6px 9px; }
+  .enh-x { width: 30px; height: 30px; }
+}
+@media (prefers-reduced-motion: reduce) { textarea.enh-busy, .enh-strip.busy .enh-ic, .enh-spin, .enh-strip { animation: none; } }
+
+/* Something is typed: the sparkle lights up, with one soft pulse the first time. */
+.enh-ready:not(.on):not(.busy) { color: var(--accent); }
+.enh-nudge { animation: enh-nudge 1.2s ease-out 1; }
+@keyframes enh-nudge { 0% { box-shadow: 0 0 0 0 rgb(67 97 238 / .5); transform: scale(1); } 35% { transform: scale(1.18); } 100% { box-shadow: 0 0 0 10px rgb(67 97 238 / 0); transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .enh-nudge { animation: none; } }

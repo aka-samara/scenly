@@ -1,0 +1,56 @@
+/* Resizable panels (resize.js). Doubled class names out-rank builder.css/pro.css, which load later. Each layout reads its saved column width from a CSS variable,
+   falling back to the original size, and only on screens wide enough for side-by-side panels. */
+@media (min-width: 1001px) {
+  .chat:not(.nolist):not(.canvas-open) { grid-template-columns: var(--chat-list, 260px) minmax(0, 1fr); }
+  .chat.canvas-open { grid-template-columns: 0 minmax(0, 1fr) var(--canvas-w, minmax(0, 1.2fr)); }
+  .codex:not(.nolist):not(.ws-wide) { grid-template-columns: var(--cx-list, 230px) minmax(360px, 1fr) var(--cx-ws, minmax(0, 1.25fr)); }
+  .codex.nolist:not(.ws-wide) { grid-template-columns: 0 minmax(360px, 1fr) var(--cx-ws, minmax(0, 1.25fr)); }
+}
+@media (min-width: 1181px) {
+  .vb-body.vb-body { grid-template-columns: var(--vb-list, minmax(250px, 300px)) var(--vb-panel, minmax(280px, 340px)) minmax(0, 1fr); }
+}
+@media (min-width: 981px) {
+  .pa-split.pa-split { grid-template-columns: var(--pa-left, minmax(340px, 44%)) minmax(0, 1fr); }
+  .pt-split.pt-split { grid-template-columns: minmax(0, 1fr) var(--pt-right, 348px); }
+  .pe-work.pe-work { grid-template-columns: minmax(0, 1fr) var(--pe-right, 320px); }
+}
+
+/* the divider */
+.rz-h { position: fixed; z-index: 60; width: 9px; cursor: col-resize; touch-action: none; }
+.rz-h[hidden] { display: none; }
+.rz-h::after { content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 3px; border-radius: 3px; background: var(--accent); opacity: 0; transition: opacity .15s .1s; }
+.rz-h:hover::after, .rz-h.on::after { opacity: .9; }
+body.rz-drag, body.rz-drag * { user-select: none !important; cursor: col-resize !important; }
+body.rz-drag iframe, body.rz-drag video { pointer-events: none; }
+
+/* movable, resizable pop-ups */
+@media (min-width: 641px) {
+  .modal-bg .modal-head, .xp-head { cursor: move; }
+  .modal-bg .modal-head :is(button, input, select, a), .xp-head button { cursor: pointer; }
+  .modal-bg > .modal, .xp-modal { resize: both; min-width: 320px; min-height: 120px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+}
+
+/* expand a whole side panel (Builder scene panel, Studio Pro settings) */
+.pn-btn { position: fixed; z-index: 86; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px;
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--line-2); cursor: pointer; transition: background .12s, color .12s; }
+.pn-btn:hover, .pn-btn.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.pn-btn[hidden] { display: none; }
+.pn-bg { position: fixed; inset: 0; z-index: 84; background: rgba(0,0,0,.6); backdrop-filter: blur(3px); animation: fade .15s; }
+.pn-max { position: fixed !important; z-index: 85; top: 4vh; bottom: 4vh; left: max(4vw, calc(50vw - 560px)); right: max(4vw, calc(50vw - 560px));
+  max-height: none !important; box-shadow: var(--shadow); border-color: var(--line-2) !important; animation: fade .15s; }
+.pn-ph { border: 1px dashed var(--line-2); border-radius: 14px; min-width: 0; }
+body.pn-open .rz-h { display: none; }
+.vb-panel.pn-max { padding-bottom: 24px; gap: 16px; }
+.vb-panel.pn-max > :not(.vb-head) { margin: 0 24px; }
+.vb-panel.pn-max .vb-head { padding: 14px 64px 14px 24px; }
+.vb-panel.pn-max #vb-prompt { min-height: 220px; font-size: 15px; line-height: 1.6; }
+.vb-panel.pn-max #vb-narr { min-height: 90px; }
+.pt-panel.pn-max { padding: 20px 64px 20px 24px; }
+.pt-panel.pn-max #pt-prompt { min-height: 200px; }
+.vb-panel.pn-max > .btn.block { width: auto; }
+@media (min-width: 981px) { .pt-panel { padding-top: 46px; } .pt-panel.pn-max { padding-top: 52px; } }
+.lightbox .pn-max { z-index: 5; border-radius: 18px; border: 1px solid var(--line-2); }
+.lightbox.editor > aside.pn-max { padding: 24px 64px 24px 28px; }
+.lightbox.editor > aside.pn-max .ed-ta { min-height: 160px; font-size: 15px; }
+.vb-tl.pn-max { height: auto; }
+.vb-list.pn-max .vb-head { padding-right: 16px; }

@@ -1,0 +1,18 @@
+# One-server setup (Stage 1). Coolify can deploy this file directly, or use the Dockerfile build pack
+# with a persistent volume mounted at /app/data. Settings go in Coolify's Environment Variables (or a .env file here).
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "3000:3000"
+    volumes:
+      - polymind-data:/app/data   # volume name kept after the rename to Scenly so existing data stays attached
+    # Chromium needs more shared memory than Docker's default 64 MB for big PDFs.
+    shm_size: "512m"
+    stop_grace_period: 30s
+volumes:
+  polymind-data:

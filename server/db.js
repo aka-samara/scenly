@@ -1,0 +1,81 @@
+// Tiny JSON-file database. Good for local use and small deployments;
+// swap for Postgres/SQLite before scaling to many users.
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { scaleCredits, CREDIT_SCALE } from './creditscale.js';
+
+export const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
+export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+export const MEDIA_DIR = path.join(DATA_DIR, 'media');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
+
+for (const d of [DATA_DIR, UPLOAD_DIR, MEDIA_DIR]) fs.mkdirSync(d, { recursive: true });
+
+const empty = () => ({ users: [], sessions: {}, conversations: [], ledger: [], files: [], tasks: [], payments: [], generations: [], projects: [], characters: [], jobs: [], holds: [], vprojects: [], tracks: [] });
+
+// A restore (npm run restore) leaves the database as db.json.restore; it takes over here, at start,
+// so a restore can be run while the app is up and then finished with a restart.
+const RESTORE_FILE = DB_FILE + '.restore';
+if (fs.existsSync(RESTORE_FILE)) {
+  if (fs.existsSync(DB_FILE)) fs.renameSync(DB_FILE, `${DB_FILE}.before-restore-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  fs.renameSync(RESTORE_FILE, DB_FILE);
+  console.log('[restore] using the restored database');
+}
+
+let db;
+try {
+  db = { ...empty(), ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) };
+} catch {
+  db = { ...empty(), creditScale: CREDIT_SCALE }; // a new database starts in the current credit unit
+}
+// Credits became 10 times smaller on 2026-11-19 (1,000 credits = $1). A database from before is converted here,
+// once, before anything reads it; the file as it was is kept beside it.
+if (db.creditScale !== CREDIT_SCALE) {
+  const keep = `${DB_FILE}.before-credits-x${CREDIT_SCALE}-${new Date().toISOString().replace(/[:.]/g, '-')}`; // a copy of exactly what is converted
+  fs.copyFileSync(DB_FILE, keep);
+  scaleCredits(db);
+  const tmp = DB_FILE + '.tmp-scale'; fs.writeFileSync(tmp, JSON.stringify(db)); fs.renameSync(tmp, DB_FILE);
+  console.log(`[credits] balances and history multiplied by ${CREDIT_SCALE}: 1,000 credits = $1 now. The file from before is ${path.basename(keep)}`);
+}
+
+// Saving rewrites the whole file, which pauses the app for a moment (about 0.5 s at 150 MB).
+// DB_SAVE_MS sets how often at most: 150 ms locally; 5 s is the production default (Dockerfile).
+// The file write itself runs in the background; a shutdown or restart saves at once.
+const SAVE_MS = Math.max(50, Number(process.env.DB_SAVE_MS) || 150);
+// Health of saving, shown on /healthz and the admin health page.
+export const saveState = { ok: true, error: null, bytes: 0, at: null };
+let timer = null; let writing = false; let again = false; let lastSave = 0; let syncSaves = 0;
+function writeSync() {
+  syncSaves++; // a background write that started earlier must not replace this newer file
+  const tmp = DB_FILE + '.tmp-now';
+  fs.writeFileSync(tmp, JSON.stringify(db));
+  fs.renameSync(tmp, DB_FILE);
+}
+async function flush() {
+  timer = null;
+  if (writing) { again = true; return; }
+  writing = true; lastSave = Date.now(); const mark = syncSaves;
+  try {
+    const tmp = DB_FILE + '.tmp';
+    const text = JSON.stringify(db); // fails past about 512 MB: the most this file database can hold
+    await fs.promises.writeFile(tmp, text);
+    Object.assign(saveState, { ok: true, error: null, bytes: text.length, at: new Date().toISOString() });
+    if (mark === syncSaves) await fs.promises.rename(tmp, DB_FILE);
+  } catch (e) { console.error('[db] save failed:', e.message); Object.assign(saveState, { ok: false, error: e.message }); setTimeout(save, 30000).unref?.(); }
+  finally { writing = false; }
+  if (again) { again = false; save(); }
+  if (saveState.bytes > 350 * 1048576 && !saveState.warned) { saveState.warned = true; console.warn('[db] the database file is over 350 MB; it cannot grow past about 512 MB. Plan the move to Postgres.'); }
+}
+export function save() {
+  if (!timer) timer = setTimeout(flush, Math.max(0, SAVE_MS - (Date.now() - lastSave)));
+}
+export function saveNow() {
+  if (timer) { clearTimeout(timer); timer = null; }
+  writeSync();
+}
+process.on('exit', () => { if (timer || writing) writeSync(); });
+
+export const id = (p = '') => p + crypto.randomBytes(9).toString('base64url');
+export const now = () => new Date().toISOString();
+export default db;

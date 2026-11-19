@@ -1,0 +1,120 @@
+/* Layout fixes and the phone ("native app") layer. Loaded after styles.css from index.html.
+   Rules that must beat stylesheets loaded later (builder.css, pro.css, admin.css) start with `html body`. */
+
+/* ---------- all widths: labels that wrapped or spilled out of their buttons ---------- */
+.opt { white-space: nowrap; min-width: 0; }
+/* Size choices carry a name and the pixel size on two lines ("Square / 1024 × 1024"). */
+.opts:has(.two) { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); }
+.opt:has(.two) { height: auto; min-height: 44px; padding: 6px 10px; justify-content: flex-start; text-align: left; }
+.opt .two { min-width: 0; }
+.opt .two small { white-space: nowrap; }
+.theme-btn { flex: none; }
+.chipbtn .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtab-bar { display: none; }
+
+@media (max-width: 860px) {
+  /* Dim the page behind the open side menu, like a native drawer. */
+  .shell.mobile-open .main::after { content: ''; position: absolute; inset: 0; z-index: 55; background: rgba(0,0,0,.5); animation: fade .15s; }
+  .sidebar { padding-top: max(14px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+}
+
+/* ---------- phones ---------- */
+@media (max-width: 640px) {
+  html, body { -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
+  * { -webkit-tap-highlight-color: transparent; }
+  /* 16px text in fields stops iPhone Safari from zooming in when a box is tapped. */
+  html body input:not([type=checkbox]):not([type=radio]):not([type=range]), html body textarea, html body select { font-size: 16px; }
+
+  /* Bottom tab bar (mobile-nav.js). The app shell stops above it so docks and sticky buttons stay visible. */
+  :root { --tabbar: calc(58px + env(safe-area-inset-bottom)); }
+  body.has-tabbar .shell { height: calc(100% - var(--tabbar)); }
+  body.has-tabbar .mtab-bar { display: grid; }
+  .mtab-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 58; height: var(--tabbar); padding: 0 6px env(safe-area-inset-bottom);
+    grid-template-columns: repeat(5, 1fr); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4); border-top: 1px solid var(--line); }
+  .mtab-bar a, .mtab-bar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0;
+    color: var(--faint); font-size: 10.5px; font-weight: 600; text-decoration: none; background: none; border: 0; padding: 0; }
+  .mtab-bar .i { width: 22px; height: 22px; }
+  .mtab-bar .on { color: var(--accent); }
+  /* While typing, the keyboard needs the room: hide the bar and give the page the full height back. */
+  /* kb-open is set by mobile-nav.js when the on-screen keyboard takes part of the window. */
+  body.has-tabbar.kb-open .mtab-bar { display: none; }
+  body.has-tabbar.kb-open .shell { height: 100%; }
+  .shell.mobile-open ~ .mtab-bar, body:has(.shell.mobile-open) .mtab-bar { z-index: 50; }
+
+  /* Top bar respects the notch. */
+  .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
+
+  /* Touch-size targets (about 40px, Apple asks for 44). */
+  html body .icon-btn { width: 40px; height: 40px; }
+  html body .icon-btn.sm { width: 36px; height: 36px; }
+  html body .icon-btn.caret { width: 26px; }
+  .theme-btn { width: 40px; height: 40px; }
+  .opt { min-height: 40px; }
+  .opts .opt { height: auto; min-height: 42px; }
+  html body .switch { width: 44px; height: 26px; border-radius: 13px; }
+  html body .switch::after { width: 22px; height: 22px; }
+  html body .switch.on::after { transform: translateX(18px); }
+  /* Small "i" help dots keep their look but get a finger-sized hit area. */
+  .info { position: relative; }
+  .info::before { content: ''; position: absolute; inset: -11px; }
+  .settings h4 button { min-height: 36px; padding: 0 4px; }
+  .hero .dots { gap: 10px; }
+  .hero .dots button { position: relative; }
+  .hero .dots button::before { content: ''; position: absolute; inset: -12px -6px; }
+  /* Top bar on narrow phones: History / Explore show as icons so nothing is cut off. */
+  .topbar .seg button { font-size: 0; gap: 0; padding: 0 10px; }
+  .topbar .seg button .i { width: 17px; height: 17px; }
+  /* The prompt bar has its own "taller" button; the floating large-editor button would sit on the typing. */
+  body:has(.bar textarea:focus) .xp-btn { display: none; }
+  html body .btn.sm { min-height: 36px; }
+  html body select { min-height: 36px; }
+  html body .seg button { height: 36px; }
+  html body .pt-stepper { height: 36px; }
+  html body .pt-stepper button { width: 36px; height: 36px; font-size: 18px; }
+  html body .xp-btn { width: 34px; height: 34px; }
+  html body #enh-menu.icon-btn.caret { width: 28px; }
+  .bar-note button.link, button.link { min-height: 32px; }
+
+  /* Pop-up menus and pickers open as a bottom sheet across the full width. */
+  html body .popover { left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important; width: auto;
+    max-height: 78vh !important; --pop-max: 78vh !important; border-radius: 18px 18px 0 0; border-width: 1px 0 0;
+    padding: 10px 8px calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 0 0 100vmax rgba(0,0,0,.5), var(--shadow); animation: sheet-up .2s ease-out; }
+  html body .popover::before { content: ''; display: block; width: 38px; height: 4px; border-radius: 4px; background: var(--line-2); margin: 0 auto 8px; }
+  html body .popover > * { width: auto !important; max-width: none !important; min-width: 0 !important; }
+  html body .popover .menu button, html body .popover .menu a { min-height: 44px; }
+  body.has-tabbar .popover { z-index: 120; }
+
+  /* Small dialogs become bottom sheets too; big ones are already full screen. */
+  .modal-bg.dlg { place-items: end stretch; }
+  .modal.dlg-box, .modal.dlg-box.wide { width: 100%; max-height: 92vh; border-radius: 20px 20px 0 0; padding-bottom: env(safe-area-inset-bottom); animation: sheet-up .2s ease-out; }
+
+  /* Rows of tabs scroll sideways inside themselves, never the page. */
+  html body .pro-tabs, html body .adm-tabs, .seg, .st-cats, .asset-from { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+  html body .pro-tabs::-webkit-scrollbar, html body .adm-tabs::-webkit-scrollbar { display: none; }
+  html body .pro-tabs a { height: 38px; padding: 0 12px; scroll-snap-align: start; flex: none; }
+  /* Fade the right edge so it is clear there are more tabs. */
+  html body .pro-tabs { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+
+  /* Video Agent: options as an even two-column grid instead of ragged chips. */
+  html body .va-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  html body .va-chip { height: 40px; width: 100%; box-sizing: border-box; min-width: 0; padding: 0 6px 0 10px; overflow: hidden; white-space: nowrap; }
+  html body .va-chip select { flex: 1; min-width: 0; max-width: none; height: 36px; font-size: 16px; }
+  html body .va-chip.sw { grid-column: 1 / -1; height: auto; min-height: 44px; padding: 6px 10px; line-height: 1.25; }
+  html body .va-chip.sw .switch { margin-left: auto; }
+  html body .va-chip:has(#va-music) { grid-column: 1 / -1; }
+  html body .va-chips > :not(.va-chip) { grid-column: 1 / -1; justify-self: start; max-width: 100%; }
+  html body .va-chip:has(select#va-style), html body .va-chip:has(select#va-lang) { grid-column: 1 / -1; }
+
+  /* Plans: the "Your plan" card stacks its buttons under the text. */
+  .plan-panel { flex-direction: column; align-items: stretch; }
+  .plan-panel .pp-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .plan-panel .pp-btns .btn { flex: 1 1 auto; justify-content: center; }
+
+  /* Composer and sticky buttons clear the home indicator. */
+  .dock { bottom: max(10px, env(safe-area-inset-bottom)); }
+  body.has-tabbar .dock { bottom: 10px; }
+}
+
+@keyframes sheet-up { from { transform: translateY(24px); opacity: .4; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .popover, .modal.dlg-box { animation: none !important; } }

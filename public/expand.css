@@ -1,0 +1,31 @@
+/* Expand editor (expand.js): the floating expand button and the large pop-up text editor. */
+.xp-btn { position: fixed; z-index: 95; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px;
+  background: var(--panel-3); color: var(--text-2); border: 1px solid var(--line-2); box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  cursor: pointer; opacity: .9; transition: opacity .12s, background .12s, color .12s; animation: xp-in .12s ease-out; }
+.xp-btn:hover { opacity: 1; background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.xp-btn[hidden] { display: none; }
+@keyframes xp-in { from { opacity: 0; transform: scale(.85); } to { opacity: .9; transform: none; } }
+
+.xp-bg { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.66); backdrop-filter: blur(4px);
+  display: grid; place-items: center; padding: 24px; animation: fade .15s; }
+.xp-modal { width: min(980px, 100%); height: min(760px, 100%); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--panel-m); border: 1px solid var(--line-2); border-radius: 18px; box-shadow: var(--shadow); }
+.xp-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px 14px 20px; border-bottom: 1px solid var(--line); }
+.xp-head b { font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xp-count { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.xp-count.near { color: var(--warn); }
+.xp-x { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--muted); }
+.xp-x:hover { background: rgb(var(--ink) / .06); color: var(--text); }
+.xp-ta { flex: 1; min-height: 0; width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--text);
+  padding: 20px 24px; font: inherit; font-size: 16px; line-height: 1.65; }
+.xp-ta::placeholder { color: var(--faint); }
+.xp-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.xp-grow { flex: 1; }
+.xp-keys { color: var(--faint); font-size: 12px; }
+
+@media (max-width: 640px) {
+  .xp-bg { padding: 0; }
+  .xp-modal { width: 100%; height: 100%; border-radius: 0; border: 0; }
+  .xp-keys { display: none; }
+  .xp-ta { padding: 16px; }
+}
