@@ -75,7 +75,9 @@ app.use('/vendor/hljs.js', express.static(path.join(nm, '@highlightjs/cdn-assets
 app.use('/vendor/hljs-light.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github.min.css')));
 app.use('/vendor/hljs-dark.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github-dark.min.css')));
 app.use('/vendor/builder-plan.js', express.static(path.join(here, 'builder', 'plan.js'))); // the same timeline maths in the browser and on the server
-app.use(express.static(path.join(here, '..', 'public')));
+// App code must revalidate (cheap 304 via ETag): without this Cloudflare gives browsers a 4 hour cache and a deploy reaches people hours late.
+const noCache = (res, file) => { if (/\.(html|js|css|mjs)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache'); };
+app.use(express.static(path.join(here, '..', 'public'), { setHeaders: noCache }));
 // Plain links for app stores and sign-in providers (Google OAuth branding): /privacy and /terms open the legal pages.
 for (const k of ['privacy', 'terms']) app.get('/' + k, (req, res) => res.redirect(302, '/#/' + k));
 
@@ -336,7 +338,8 @@ function wantedFile(text) {
 const CHAT_SYSTEM = () => `You are Scenly, a helpful, accurate assistant. Today is ${new Date().toDateString()}. Use Markdown for structure and fenced code blocks with a language tag for code. When documents are attached, ground your answers in them and cite the document name.
 
 This app has two features you must rely on:
-1. Live preview. Any \`\`\`html code block is rendered as a working page next to the chat. When the user asks for a website, web page, landing page, chart, graph, dashboard, analytics or any other visual, reply with ONE complete, self-contained HTML document in a single \`\`\`html block: inline CSS and JavaScript, responsive, and libraries such as Chart.js loaded from https://cdn.jsdelivr.net when useful. Use realistic example data when none is given. Never say you cannot show visuals, and do not give Python plotting scripts unless the user asks for Python.
+1. Live preview. Any \`\`\`html code block is rendered as a working page in the chat. Only when the user asks for a website, web page, landing page, app, game, chart, graph, dashboard, analytics or another visual, reply with ONE complete, self-contained HTML document in a single \`\`\`html block: inline CSS and JavaScript, responsive, and libraries such as Chart.js loaded from https://cdn.jsdelivr.net when useful. Use realistic example data when none is given. Never say you cannot show visuals, and do not give Python plotting scripts unless the user asks for Python.
+   For everyday questions (weather, facts, news, advice, how-to, explanations, chit-chat) answer in plain words with Markdown. Do NOT write HTML, a web page, a template or any code unless the user asked for code, a page, an app or a visual. If you need a detail you don't have, such as the user's city or location for weather, ask for it in one short sentence. You have no live data (weather, prices, scores): say so briefly and give useful general information rather than inventing current numbers.
 2. Downloads. Every reply has a Download button that saves it as Word (.docx), PDF, Markdown or HTML. Never say you cannot create or attach files, and never give copy-and-paste instructions.`;
 const FILE_SYSTEM = (kind) => `
 
@@ -917,7 +920,7 @@ app.get('/api/admin/stats', requireUser, requireAdmin, (_req, res) => {
 
 mountHealth(app, { requireUser, requireAdmin });
 mountAdmin(app, { requireUser, requireAdmin, wrap });
-app.get(/^\/(?!api\/|p\/|healthz$).*/, (_req, res) => res.sendFile(path.join(here, '..', 'public', 'index.html')));
+app.get(/^\/(?!api\/|p\/|healthz$).*/, (_req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(here, '..', 'public', 'index.html')));
 
 const PORT = Number(process.env.PORT || 3000);
 const server = serve(app); // already listening (server/handover.js), so a deploy never drops or loses requests
