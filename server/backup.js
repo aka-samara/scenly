@@ -17,6 +17,10 @@ export function snapshot() { return zlib.gzipSync(Buffer.from(JSON.stringify(db)
 export async function backupNow({ when = new Date() } = {}) {
   const buf = snapshot(); const day = when.toISOString().slice(0, 10); const hour = when.toISOString().slice(11, 13);
   const cfg = bucketConfig();
+  // Never let a brand-new, empty install (or one waiting for a restore) overwrite the bucket's real backups.
+  if (cfg && (!(db.users || []).length || fs.existsSync(path.join(DATA_DIR, 'db.json.restore')))) {
+    state.skipped = when.toISOString(); return true;
+  }
   try {
     if (cfg) {
       await putObject(cfg, `backups/db/hourly/${hour}.json.gz`, buf, { contentType: 'application/gzip' });
