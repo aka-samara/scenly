@@ -1,7 +1,7 @@
 // Production basics: security headers, request limits, health checks, settings check and a clean shutdown.
 // Everything here is harmless on a laptop; the stricter parts only switch on with NODE_ENV=production.
 import fs from 'node:fs';
-import db, { DATA_DIR, saveNow, saveState } from './db.js';
+import db, { DATA_DIR, saveNow, saveState, releaseDb } from './db.js';
 import { bucketStatus, bucketOn } from './storage.js';
 import { backupStatus } from './backup.js';
 import { ffmpegInfo } from './ffmpeg.js';
@@ -94,8 +94,11 @@ export function gracefulShutdown(server) {
   const stop = (sig) => {
     if (closing) return; closing = true; console.log(`[shutdown] ${sig}: saving and stopping`);
     try { saveNow(); } catch (e) { console.error('[shutdown] save failed:', e.message); }
-    server.close(() => { try { saveNow(); } catch {} process.exit(0); });
-    setTimeout(() => { try { saveNow(); } catch {} process.exit(0); }, Number(process.env.SHUTDOWN_GRACE_MS) || 10000).unref();
+    // The final save also hands the data folder to a new copy that is waiting for it (server/handover.js).
+    const done = () => { try { releaseDb(); } catch (e) { console.error('[shutdown] save failed:', e.message); } process.exit(0); };
+    server.close(done);
+    server.closeIdleConnections?.();
+    setTimeout(done, Number(process.env.SHUTDOWN_GRACE_MS) || 10000).unref();
   };
   process.on('SIGTERM', () => stop('SIGTERM')); process.on('SIGINT', () => stop('SIGINT'));
 }
