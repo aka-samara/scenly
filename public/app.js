@@ -221,6 +221,23 @@ function renderMd(text) {
   wrap.querySelectorAll('a').forEach((a) => { a.target = '_blank'; a.rel = 'noopener'; });
   return wrap;
 }
+// Copy a chat answer as clean text: no ** or # symbols. Apps that accept formatting (email, Docs, Word) get bold,
+// lists and tables with no colours or background; plain-text apps get readable text with bullets.
+async function copyRich(md, btn) {
+  const html = DOMPurify.sanitize(marked.parse(md || ''));
+  const d = h('div', { style: { position: 'fixed', left: '-9999px', top: '0', width: '600px' } });
+  d.innerHTML = html;
+  d.querySelectorAll('ol').forEach((ol) => [...ol.children].forEach((li, i) => li.prepend(`${(Number(ol.getAttribute('start')) || 1) + i}. `)));
+  d.querySelectorAll('ul > li').forEach((li) => li.prepend('• '));
+  document.body.append(d);
+  const plain = d.innerText.replace(/\n{3,}/g, '\n\n').trim();
+  d.remove();
+  try {
+    if (!window.ClipboardItem || !navigator.clipboard?.write) throw new Error('no rich clipboard');
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([plain], { type: 'text/plain' }) })]);
+    if (btn) { const old = btn.innerHTML; btn.replaceChildren(icon('check')); setTimeout(() => (btn.innerHTML = old), 1400); }
+  } catch { return copyText(plain, btn); }
+}
 async function copyText(text, btn) {
   try { await navigator.clipboard.writeText(text); } catch { const ta = h('textarea', {}, text); document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
   if (btn) { const old = btn.innerHTML; btn.replaceChildren(icon('check'), btn.textContent.trim() ? 'Copied' : ''); setTimeout(() => (btn.innerHTML = old), 1400); }
@@ -2778,7 +2795,7 @@ function renderMessage(msg, isLast) {
   if (msg.error) body.append(errBox({ message: msg.error }, isLast && msg.mode === 'chat' ? () => submit({ regenerate: true }) : null));
   if (msg.note) body.append(h('div', { class: 'gen-note' }, msg.note));
   if (msg.stopped) body.append(h('div', { style: { color: 'var(--faint)', fontSize: '13px', marginTop: '6px' } }, 'Stopped'));
-  const copyBtn = msg.content && h('button', { class: 'icon-btn sm', title: 'Copy', onclick: (e) => copyText(msg.content, e.currentTarget) }, icon('copy'));
+  const copyBtn = msg.content && h('button', { class: 'icon-btn sm', title: 'Copy', onclick: (e) => copyRich(msg.content, e.currentTarget) }, icon('copy'));
   const regen = isLast && msg.mode === 'chat' && h('button', { class: 'icon-btn sm', title: 'Regenerate', onclick: () => submit({ regenerate: true }) }, icon('retry'));
   const dlBtn = msg.mode === 'chat' && msg.content && !msg.doc && h('button', { class: 'icon-btn sm', title: 'Download as Word, PDF or other formats', onclick: (e) => openDownloadMenu(e.currentTarget, msg.content) }, icon('dl'));
   return h('div', { class: 'msg ai', 'data-id': msg.id },

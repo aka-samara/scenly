@@ -118,3 +118,76 @@
 
 @keyframes sheet-up { from { transform: translateY(24px); opacity: .4; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .popover, .modal.dlg-box { animation: none !important; } }
+
+/* Narrow screens: the top bar (menu, help, theme, credits) gets its own solid strip, like a native app header,
+   so page content scrolls underneath it instead of showing through behind the buttons. */
+@media (max-width: 860px) {
+  html body .main .topbar { background: color-mix(in srgb, var(--bg) 90%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3);
+    border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+}
+
+/* Phones, second pass (whole-app check at 360-430 wide). */
+@media (max-width: 640px) {
+  /* Top bar: light/dark switch lives in the account menu on phones, so the credits stay fully visible. */
+  html body .main .topbar .theme-btn { display: none; }
+  html body .main .topbar { gap: 6px; }
+  html body .main .topbar .pill { flex: none; height: 36px; padding: 0 11px; }
+  html body .main .topbar .title { flex: 1 1 auto; min-width: 0; }
+  html body .main .topbar > .grow { min-width: 0; }
+  html body .main .topbar .vb-title { flex: 1 1 60px; width: auto; min-width: 0; }
+  html body .main .topbar:has(.vb-title) > .grow, html body .main .topbar .vb-top:empty { display: none; }
+
+  /* Plain tables (credit history, payments, model prices) become stacked rows instead of thin squeezed columns. */
+  .t thead { display: none; }
+  .t, .t tbody { display: block; }
+  .t tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; grid-auto-flow: row dense;
+    padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  .t tr:last-child { border-bottom: 0; }
+  .t td { display: block; padding: 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
+  .t td:first-child { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+  .t td:not(.num) { grid-column: 1; }
+  .t td.num { grid-column: 2; text-align: right; }
+  .t td:first-child.num { grid-column: 1 / -1; text-align: left; }
+
+  /* Admin console header keeps "Admin console" on one line. */
+  html body .adm-title b { white-space: nowrap; font-size: 14px; }
+  html body .adm-title { flex: 1 1 auto; overflow: hidden; }
+}
+
+/* ---------- Phones and tablets: Claude-style chat (and Code) composer ----------
+   One rounded box: the text on top, then a single slim row of round icon buttons. Model, Project and Create keep
+   their menus but show as icons (the model as its logo), so the conversation gets the room. Desktop is untouched. */
+@media (max-width: 860px) {
+  html body :is(.chat-main, .cx-main) .dock { padding: 0 10px; bottom: 8px; }
+  html body :is(.chat-main, .cx-main) .bar { border-radius: 26px; padding: 6px 8px 6px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.28); }
+  html body :is(.chat-main, .cx-main) .bar textarea { min-height: 44px; padding: 8px 4px 2px; font-size: 16px; line-height: 1.45; }
+  html body :is(.chat-main, .cx-main) .bar-row { flex-wrap: nowrap; gap: 2px; margin-top: 2px; min-width: 0; }
+  html body :is(.chat-main, .cx-main) .bar-row > .grow { flex: 1 1 0; min-width: 0; }
+  /* Chips become round icon buttons with no frame, like Claude's "+" and tools. */
+  html body :is(.chat-main, .cx-main) .bar-row .chipbtn { height: 36px; min-width: 36px; padding: 0 8px; gap: 3px; border-radius: 18px;
+    background: transparent; border-color: transparent; flex: none; max-width: none; }
+  html body :is(.chat-main, .cx-main) .bar-row .chipbtn:is(:hover, :active) { background: rgb(var(--ink) / .08); }
+  html body :is(.chat-main, .cx-main) .bar-row .chipbtn.on { background: rgba(67,97,238,.14); }
+  html body :is(.chat-main, .cx-main) .bar-row .chipbtn .nm { display: none; }
+  html body :is(.chat-main, .cx-main) .bar-row .chipbtn .i { width: 18px; height: 18px; }
+  html body :is(.chat-main, .cx-main) .bar-row .chipbtn .logo-sm { width: 22px; height: 22px; }
+  /* The model chevron stays, small, so it reads as "change model". */
+  html body :is(.chat-main, .cx-main) .bar-row .chipbtn > .i:last-child:not(:first-child) { width: 13px; height: 13px; }
+  html body :is(.chat-main, .cx-main) .bar-row .doc-chips { display: inline-flex; flex: none; }
+  html body :is(.chat-main, .cx-main) .bar-row .icon-btn { width: 36px; height: 36px; border-radius: 18px; }
+  html body :is(.chat-main, .cx-main) .bar-row .send { width: 36px; height: 36px; border-radius: 50%; flex: none; margin-left: 2px; }
+  /* The disclaimer line is kept but quiet, and sits close under the box. */
+  html body :is(.chat-main, .cx-main) .bar-hint { font-size: 10.5px; margin-top: 4px; opacity: .8; }
+
+  /* Messages get the width: smaller side margins, wider bubbles. */
+  html body .thread { padding-left: 14px; padding-right: 14px; }
+  html body .msg { margin-bottom: 20px; }
+  html body .bubble { max-width: 88%; border-radius: 20px 20px 6px 20px; padding: 10px 14px; font-size: 15.5px; }
+  html body .chat-main .topbar .title { font-size: 15px; }
+}
+@media (max-width: 640px) {
+  html body :is(.chat-main, .cx-main) .dock { bottom: 6px; padding: 0 8px; }
+  html body .chat-hero { padding-top: 12vh; }
+}
+@media (max-width: 860px) { html body .cx-main .bar textarea { min-height: 52px; } }
