@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { serve } from './handover.js'; // must stay before every import that reads the database
 import express from 'express';
 import { mountVoice } from './voice.js';
 import multer from 'multer';
@@ -919,7 +920,8 @@ mountAdmin(app, { requireUser, requireAdmin, wrap });
 app.get(/^\/(?!api\/|p\/|healthz$).*/, (_req, res) => res.sendFile(path.join(here, '..', 'public', 'index.html')));
 
 const PORT = Number(process.env.PORT || 3000);
-const server = app.listen(PORT, () => {
+const server = serve(app); // already listening (server/handover.js), so a deploy never drops or loses requests
+{
   console.log(`Scenly running at http://localhost:${PORT}`);
   const ff = ffmpegInfo();
   console.log(ff.ok ? `ffmpeg ${ff.version} found: video tools are ready` : 'ffmpeg was not found: video posters, previews and exports are off until it is installed ("brew install ffmpeg" on a Mac)');
@@ -931,6 +933,6 @@ const server = app.listen(PORT, () => {
   if (subsOn()) console.log(`Subscriptions are on (${process.env.STRIPE_SECRET_KEY ? (/^sk_live_/.test(process.env.STRIPE_SECRET_KEY) ? 'Stripe LIVE mode' : 'Stripe test mode') : 'demo mode, no Stripe key'})`);
   if (!process.env.AICREDIT_API_KEY) console.warn('Warning: AICREDIT_API_KEY is not set. Copy .env.example to .env and add your key.');
   getCatalog().then((m) => console.log(`Loaded ${m.length} models`));
-});
+}
 
 gracefulShutdown(server);

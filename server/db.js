@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { scaleCredits, CREDIT_SCALE } from './creditscale.js';
+import './handover.js'; // waits here, during a deploy, until the old copy of the app has saved and let go
 
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
@@ -49,15 +50,28 @@ let timer = null; let writing = false; let again = false; let lastSave = 0; let 
 // One writer only. During a rolling deploy the old and new app run side by side on the same data folder for a
 // moment; the old one must not save its (older) copy over the file the new one just loaded. Each start claims the
 // folder with a fresh token, and an app that no longer holds the token stops writing the database.
+// The new copy only gets here after the old one has let go (server/handover.js), so it reads a complete db.json.
 const OWNER_FILE = path.join(path.dirname(DB_FILE), '.db-owner');
+const ALIVE_FILE = path.join(path.dirname(DB_FILE), '.db-alive'); // heartbeat: tells a starting copy that this one is still running
 const OWNER = crypto.randomBytes(12).toString('hex');
-fs.writeFileSync(OWNER_FILE, OWNER);
+fs.writeFileSync(OWNER_FILE + '.tmp', OWNER); fs.renameSync(OWNER_FILE + '.tmp', OWNER_FILE);
 let lostOwner = false;
 export function ownsDb() {
   if (lostOwner) return false;
   let cur = null; try { cur = fs.readFileSync(OWNER_FILE, 'utf8').trim(); } catch { return true; }
   if (cur && cur !== OWNER) { lostOwner = true; console.warn('[db] a newer copy of the app took over this data folder; this copy stops saving.'); return false; }
   return true;
+}
+// Written whole (temp file, then rename), so a starting copy never reads a half-written file.
+const writeWhole = (f, text) => { fs.writeFileSync(f + '.tmp', text); fs.renameSync(f + '.tmp', f); };
+const beat = () => { try { if (!lostOwner) writeWhole(ALIVE_FILE, `${OWNER} ${Date.now()}`); } catch { /* next beat */ } };
+beat(); setInterval(beat, 2000).unref?.();
+/** Last save on shutdown, then let a waiting new copy take the data folder. */
+export function releaseDb() {
+  if (!ownsDb()) return;
+  saveNow();
+  lostOwner = true; // nothing after this may write the file
+  try { writeWhole(OWNER_FILE, 'released'); fs.rmSync(ALIVE_FILE, { force: true }); } catch (e) { console.error('[db] release failed:', e.message); }
 }
 function writeSync() {
   if (!ownsDb()) return;

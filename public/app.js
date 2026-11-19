@@ -152,6 +152,38 @@ const studioModel = (mode) => { const st = S.studio[mode]; let m = byId(st.model
 const fmtCredits = (n) => (n == null ? '–' : n >= 100 ? Math.round(n).toLocaleString() : n >= 10 ? (Math.round(n * 10) / 10).toString() : n >= 1 ? n.toFixed(1).replace(/\.0$/, '') : n >= 0.01 ? n.toFixed(2) : n > 0 ? '<0.01' : '0');
 const kindLabel = { chat: 'Chat', image: 'Image', video: 'Video', code: 'Code' };
 
+// If the sign-in ends while the app is open (signed out on another device, password changed, or a server
+// hiccup), every page used to show its own dead "Please sign in." box while the top bar still showed the account.
+// Any signed-in request that comes back 401 is checked once against /api/me; if the sign-in really is gone, the
+// app goes to the sign-in page and, once signed in again, back to the page that was open. This covers every tool,
+// including the ones that call fetch themselves (Video Builder, Docs, voice).
+const realFetch = window.fetch.bind(window);
+let signInLost = false;
+window.fetch = async (input, init) => {
+  const res = await realFetch(input, init);
+  if (res.status === 401 && S.user && !signInLost) {
+    try {
+      const u = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (u.origin === location.origin && u.pathname.startsWith('/api/') && !u.pathname.startsWith('/api/auth/')) checkSignIn();
+    } catch { /* not a URL we know */ }
+  }
+  return res;
+};
+async function checkSignIn() {
+  if (signInLost) return;
+  let r; try { r = await realFetch('/api/me', { credentials: 'same-origin' }); } catch { return; }
+  if (r.status !== 401 || signInLost) return; // still signed in: the 401 was about something else
+  signInLost = true;
+  const j = await r.json().catch(() => ({}));
+  try {
+    const back = location.hash && !/^#\/?(login|signup)?$/.test(location.hash) ? location.hash : '';
+    if (back) sessionStorage.setItem('pm-intent', JSON.stringify({ hash: back }));
+    sessionStorage.setItem('pm-signed-out', j.code === 'banned' ? 'banned' : '1');
+  } catch { /* private mode */ }
+  location.replace(location.pathname + '#/login');
+  location.reload();
+}
+
 async function api(path, opts = {}) {
   // timeoutMs: give up waiting after this long (the server has its own, shorter limit; this is the last guard).
   let timer = null;
@@ -383,6 +415,8 @@ function estimate(mode) {
 async function boot() {
   S.config = await api('/api/config');
   try { S.user = (await api('/api/me')).user; } catch (e) { S.user = null; if (e.code === 'banned') setTimeout(() => toast(e.message, 'error'), 300); }
+  let out = null; try { out = sessionStorage.getItem('pm-signed-out'); sessionStorage.removeItem('pm-signed-out'); } catch { /* private mode */ }
+  if (out && !S.user) setTimeout(() => (out === 'banned' ? toast('This account has been suspended. Please contact support if you think this is a mistake.', 'error') : toast('Your sign-in has ended. Please sign in again to carry on where you were.')), 300);
   const back = new URLSearchParams(location.search).get('auth');
   if (back) {
     history.replaceState(null, '', location.pathname + location.hash);
@@ -413,7 +447,10 @@ async function afterLogin() {
   renderShell();
   route();
 }
-window.addEventListener('hashchange', () => { if (S.user) { if ($('#main')) route(); } else if (S.config) renderPublic(); });
+window.addEventListener('hashchange', () => { if (S.user) { if ($('#main')) route(); checkSignIn(); } else if (S.config) renderPublic(); });
+// Pages such as Chat or Image open from what is already loaded, so the sign-in is also checked on each page change
+// and when the app comes back to the screen (a phone tab left for a while).
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.user) checkSignIn(); });
 async function loadModels() { S.models = (await api('/api/models')).models; }
 // Video Builder and Video Agent projects are listed in Recents too, so they can be opened again.
 // Work kept outside chats is listed in Recents too, so it can be opened again: Video Builder and Video Agent projects,
@@ -452,6 +489,7 @@ function applyIntent() {
   const it = intent.get(); intent.set(null);
   const go = (hash) => history.replaceState(null, '', hash);
   if (!it) { if (!location.hash || location.hash === '#' || /^#\/(login|signup)$/.test(location.hash)) go('#/'); return; }
+  if (it.hash) return go(it.hash); // back to the page that was open when the sign-in ended
   const m = it.modelId && byId(it.modelId);
   if (m) {
     if (it.mode === 'code') { S.codeModelId = m.id; store.set('code-model', m.id); }
