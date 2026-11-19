@@ -289,3 +289,5 @@
 .va-top .va-add { order: 0; }
 .va-top textarea { order: 1; flex: 1 1 calc(100% - 130px); min-width: 0; }
 .va-top .va-file { order: 2; max-width: 340px; }
+/* Video Agent: the microphone sits next to "Write the storyboard". */
+.va-send { display: flex; align-items: center; gap: 8px; }

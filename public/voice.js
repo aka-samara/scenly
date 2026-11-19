@@ -68,7 +68,7 @@ function buildStrip(s) {
   s.meter = h('i', {});
   s.done = h('button', { class: 'btn sm', type: 'button', onclick: () => { if (!s.finishing) stop(s, 'user'); } }, 'Done');
   s.strip = h('div', { class: 'voice-strip', role: 'status' }, h('span', { class: 'voice-dot' }), s.label, s.clock, h('span', { class: 'voice-meter' }, s.meter), h('span', { class: 'grow' }), sel, s.done);
-  const bar = s.ta.closest('.bar');
+  const bar = s.ta.closest('.bar, .va-box, .pa-box, .pro-ask, .pt-prompt');
   if (bar) bar.prepend(s.strip); else s.ta.before(s.strip);
 }
 
