@@ -167,7 +167,7 @@ export function mountPro(app, { requireUser, wrap, createGeneration, studioSessi
     const quiet = (cid, o) => { const c = db.conversations.find((x) => x.id === cid); if (c && !c.origin && (c.kind === 'image' || c.kind === 'video')) { c.origin = o; c.hideInRecents = true; n++; } };
     const tag = (g, o) => { if (!g || g.origin || g.appId) return; g.origin = o; n++; if (g.sessionId) quiet(g.sessionId, o); };
     const ids = (v, out = new Set()) => { if (typeof v === 'string') (v.match(/\b(?:m|g|vp|c)_[\w-]{6,}/g) || []).forEach((x) => out.add(x)); else if (v && typeof v === 'object') Object.values(v).forEach((x) => ids(x, out)); return out; };
-    for (const ps of db.prosessions) for (const x of ids(ps.state)) {
+    for (const ps of (db.prosessions || [])) for (const x of ids(ps.state)) {
       if (x.startsWith('m_')) tag(gens.get(files.get(x)?.generationId), 'pro');
       else if (x.startsWith('g_')) tag(gens.get(x), 'pro');
       else if (x.startsWith('c_')) quiet(x, 'pro');
@@ -175,7 +175,7 @@ export function mountPro(app, { requireUser, wrap, createGeneration, studioSessi
     }
     for (const b of db.probrands || []) for (const a of b.ads || []) if (a.media?.id) tag(gens.get(files.get(a.media.id)?.generationId), 'ads');
     // Agent clips used to open a video session named after the plan; those sessions are the agent session's, so they go under it.
-    const named = new Set(db.prosessions.map((ps) => ps.userId + ':' + ps.title));
+    const named = new Set((db.prosessions || []).map((ps) => ps.userId + ':' + ps.title));
     for (const c of db.conversations) if ((c.kind === 'image' || c.kind === 'video') && !c.origin && named.has(c.userId + ':' + c.title)) { quiet(c.id, 'pro'); for (const g of db.generations) if (g.sessionId === c.id) tag(g, 'pro'); }
     if (n) { save(); console.log(`[pro] tagged ${n} earlier Studio Pro and Ad Studio items for Assets and Recents`); }
   }
