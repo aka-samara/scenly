@@ -37,7 +37,7 @@ function start(ta, btn) {
   const lang = getLang();
   const s = { ta, btn, lang, startedAt: Date.now(), lastVoice: Date.now(), parts: [], live: '', liveSkip: 0, interim: '', base: ta.value, lastSet: ta.value, pending: 0, failed: 0, level: 0, finishing: false, ended: false, heard: false };
   active = s;
-  const wantRecorder = !SR || RECORD_ONLY.has(lang) || session.get('pm-voice-engine') === 'record';
+  const wantRecorder = !SR || RECORD_ONLY.has(lang) || session.get('pm-voice-engine2') === 'record';
   // Safari only lets audio start inside the click, so the recorder's audio context is made right here.
   if (wantRecorder) { const AC = window.AudioContext || window.webkitAudioContext; try { s.ctx = AC ? new AC() : null; s.ctx?.resume?.().catch(() => {}); } catch { s.ctx = null; } }
   buildStrip(s);
@@ -132,14 +132,15 @@ const micMessage = (e) => {
 
 // ---------- engine 1: the browser's speech recognition ----------
 function runSpeech(s) {
-  let rec = null, gotResult = false, began = 0, quick = 0, fatal = null, restart = null, watchdog = null, everStarted = false, netFails = 0;
+  let rec = null, gotResult = false, began = 0, quick = 0, fatal = null, restart = null, watchdog = null, everStarted = false, netFails = 0, everResult = false, hint = null;
   const android = /Android/i.test(navigator.userAgent);
   const commit = () => { const t = (s.live + (s.interim ? ' ' + s.interim : '')).slice(s.liveSkip).trim(); if (t) s.parts.push({ text: t }); s.live = ''; s.liveSkip = 0; s.interim = ''; };
-  const toRecorder = (remember = true) => {
-    clearTimeout(watchdog); clearTimeout(restart);
+  const toRecorder = (remember = true, why = '') => {
+    clearTimeout(watchdog); clearTimeout(restart); clearTimeout(hint);
+    console.info('[voice] live dictation unavailable here, using the recorder:', why || 'unknown');
     // This browser has the feature but its speech service refuses (blocked, offline, or switched off).
     // A passing network hiccup is not remembered: the next click tries the fast live engine again.
-    if (remember) session.set('pm-voice-engine', 'record'); commit(); write(s);
+    if (remember) session.set('pm-voice-engine2', 'record'); commit(); write(s);
     s.halt = null; s.abort = null;
     if (s.finishing) return end(s);
     runRecorder(s);
@@ -151,14 +152,14 @@ function runSpeech(s) {
       rec.continuous = !android;       // Android repeats earlier words in continuous mode
       rec.interimResults = true; rec.maxAlternatives = 1;
       rec.lang = s.lang === 'auto' ? (navigator.language || 'en-US') : s.lang;
-    } catch { return toRecorder(); }
+    } catch { return toRecorder(true, 'cannot create'); }
     gotResult = false; began = Date.now(); fatal = null;
-    rec.onstart = () => { everStarted = true; clearTimeout(watchdog); if (!s.finishing) setLabel(s, 'Listening…'); };
+    rec.onstart = () => { everStarted = true; clearTimeout(watchdog); clearTimeout(hint); if (!s.finishing) setLabel(s, 'Listening…'); };
     rec.onspeechstart = rec.onsoundstart = () => { s.lastVoice = Date.now(); };
     rec.onresult = (e) => {
       let fin = '', inter = '';
       for (let i = 0; i < e.results.length; i++) { const r = e.results[i]; const t = r[0]?.transcript || ''; if (r.isFinal) fin += (fin && !/^\s/.test(t) ? ' ' : '') + t; else inter += t; }
-      gotResult = true; s.heard = true; s.lastVoice = Date.now();
+      gotResult = true; everResult = true; s.heard = true; s.lastVoice = Date.now();
       s.live = fin; s.interim = inter; write(s);
     };
     rec.onerror = (e) => {
@@ -174,18 +175,24 @@ function runSpeech(s) {
       if (fatal === 'audio-capture') return fail(s, micMessage({ name: 'NotFoundError' }));
       if (fatal === 'network' && gotResult) netFails = 0;
       if (fatal === 'network' && ++netFails <= 2) { restart = setTimeout(begin, 600); return; }   // a short drop: keep the live engine
-      if (fatal) return toRecorder(fatal !== 'network');   // service-not-allowed, language-not-supported, or a network that keeps failing
+      if (fatal) return toRecorder(fatal !== 'network', fatal);   // service-not-allowed, language-not-supported, or a network that keeps failing
       quick = !gotResult && Date.now() - began < 1500 ? quick + 1 : 0;
-      if (quick >= 3) return toRecorder();
-      restart = setTimeout(begin, 250);   // the engines stop after a pause; keep listening until the person is done
+      // Engines that end at once again and again without ever hearing anything are not working here.
+      // Once words have come through, a quick end is only a pause (Safari and phones end often): keep going.
+      if (quick >= 4 && !everResult) return toRecorder(false, 'ends at once');
+      restart = setTimeout(begin, quick ? Math.min(1500, 250 * quick) : 250);   // the engines stop after a pause; keep listening until the person is done
     };
     // Some browsers have the feature but never start it and never say why: do not wait for ever.
     clearTimeout(watchdog);
-    if (!everStarted) watchdog = setTimeout(() => { if (s.ended || s.finishing || everStarted) return; const r = rec; try { r.onend = r.onerror = r.onresult = r.onstart = null; r.abort(); } catch { /* closed */ } toRecorder(); }, 4000);
-    try { rec.start(); } catch { restart = setTimeout(() => { quick++; if (quick >= 3) toRecorder(); else begin(); }, 400); }
+    // The first time, the browser asks for the microphone (Safari also asks for speech recognition): give the person time to answer.
+    if (!everStarted) {
+      clearTimeout(hint); hint = setTimeout(() => { if (!everStarted && !s.finishing && !s.ended) setLabel(s, 'Allow the microphone if your browser asks…'); }, 2500);
+      watchdog = setTimeout(() => { if (s.ended || s.finishing || everStarted) return; const r = rec; try { r.onend = r.onerror = r.onresult = r.onstart = null; r.abort(); } catch { /* closed */ } toRecorder(false, 'never started'); }, 15000);
+    }
+    try { rec.start(); } catch { restart = setTimeout(() => { quick++; if (quick >= 4 && !everResult) toRecorder(false, 'start refused'); else begin(); }, 400); }
   };
   s.halt = () => {
-    clearTimeout(restart); clearTimeout(watchdog);
+    clearTimeout(restart); clearTimeout(watchdog); clearTimeout(hint);
     if (!everStarted) { try { rec.onend = null; rec.abort(); } catch { /* closed */ } return end(s); }
     let closed = false; const close = () => { if (closed) return; closed = true; commit(); write(s); end(s); };
     setTimeout(close, 1800);            // some engines never fire "end"
@@ -221,12 +228,14 @@ async function runRecorder(s) {
   try { ctx = ctx || new AC(); if (ctx.state === 'suspended') await ctx.resume(); } catch { close(); return fail(s, 'This browser cannot record from a microphone.'); }
   if (s.ended) return close();
 
+  // While a part is being written, a "…" stands at the end of the text so the person sees words are coming.
+  const dots = () => { if (s.ended) return; s.interim = s.parts.some((p) => p.text === null) ? '…' : ''; write(s); };
   // ---- sending the parts, in order ----
   const queue = []; let running = 0;
   const pump = () => {
     while (running < 3 && queue.length) {
       const job = queue.shift(); running++;
-      send(job).finally(() => { running--; s.pending--; if (s.finishing && !s.pending) end(s); else { if (s.finishing) setLabel(s, `Turning speech into text… ${s.pending} left`); pump(); } });
+      send(job).finally(() => { running--; s.pending--; if (job.part.text === null) job.part.text = ''; dots(); if (s.finishing && !s.pending) end(s); else { if (s.finishing) setLabel(s, `Turning speech into text… ${s.pending} left`); pump(); } });
     }
   };
   const send = async (job) => {
@@ -236,14 +245,14 @@ async function runRecorder(s) {
         const lang = s.lang === 'auto' ? '' : s.lang;
         const res = await fetch(`/api/voice/transcribe?lang=${encodeURIComponent(lang)}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'audio/wav' }, body: job.blob, signal: ctl.signal });
         const j = await res.json().catch(() => ({}));
-        if (res.ok) { job.part.text = String(j.text || '').trim(); if (job.part.text) s.heard = true; write(s); return; }
+        if (res.ok) { job.part.text = String(j.text || '').trim(); if (job.part.text) s.heard = true; dots(); return; }
         if (res.status === 402 || res.status === 401) { s.error = j.error || 'Voice input is not available right now.'; job.part.text = ''; if (!s.finishing) stop(s, 'user'); return; }
         if (res.status === 400) { job.part.text = ''; s.failed++; return; }
       } catch { if (s.ended) return; }
       finally { clearTimeout(timer); s.calls.delete(ctl); }
       if (attempt === 1) await new Promise((r) => setTimeout(r, 800));
     }
-    job.part.text = ''; s.failed++;
+    job.part.text = ''; s.failed++; dots();
   };
 
   // ---- listening: resample to 16 kHz, find speech, cut parts at pauses ----
@@ -253,7 +262,7 @@ async function runRecorder(s) {
     const g = seg; seg = { chunks: [], samples: 0, voiced: 0, lastVoiceAt: 0 };
     if (g.voiced < 0.25) return;                             // noise or a cough, not words
     const keep = Math.min(g.samples, Math.round((g.lastVoiceAt + 0.35) * RATE));   // drop the silent tail
-    const part = { text: null }; s.parts.push(part); s.pending++;
+    const part = { text: null }; s.parts.push(part); s.pending++; dots();
     queue.push({ part, blob: wav(g.chunks, keep) }); pump();
   };
   const onChunk = (f) => {
@@ -279,7 +288,7 @@ async function runRecorder(s) {
     if (voice) seg.lastVoiceAt = dur;
     const pause = dur - seg.lastVoiceAt;
     // Whole sentences transcribe better than fragments: cut at the end of an utterance, or at a breath once the part is long.
-    if ((pause >= 1.0 && seg.voiced >= 0.3) || (dur >= 4 && pause >= 0.8) || (dur >= 8 && pause >= 0.3) || dur >= 12) cut();
+    if ((pause >= 0.7 && seg.voiced >= 0.3) || (dur >= 2.5 && pause >= 0.25) || dur >= 6) cut();
   };
 
   src = ctx.createMediaStreamSource(stream); mute = ctx.createGain(); mute.gain.value = 0;
@@ -296,7 +305,7 @@ async function runRecorder(s) {
   if (s.ended) return close();
   src.connect(node); node.connect(mute); mute.connect(ctx.destination);
   stream.getAudioTracks()[0]?.addEventListener('ended', () => { if (!s.finishing && !s.ended) { s.error = 'The microphone was disconnected.'; stop(s, 'user'); } });
-  s.lastVoice = Date.now(); if (!s.finishing) setLabel(s, 'Listening…');
+  s.lastVoice = Date.now(); if (!s.finishing) setLabel(s, 'Listening… words appear after each short pause');
   // Audio that never starts flowing (a suspended audio engine) must not look like listening.
   setTimeout(() => { if (!s.ended && !s.finishing && t === 0) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); setTimeout(() => { if (!s.ended && !s.finishing && t === 0) fail(s, 'The microphone did not start. Click the microphone again.'); }, 1500); } }, 1500);
 
