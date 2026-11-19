@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 
 const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
 export const OWNER_FILE = path.join(DATA_DIR, '.db-owner');
@@ -44,20 +45,34 @@ function otherCopyHolds() {
   return holds;
 }
 
-// Passes one request on to the old copy. If the old copy no longer takes connections (it has begun to stop),
-// the request is held instead and answered here once the data is handed over.
+// Passes one request on to the old copy. The body is read first, so if the old copy stops before it answers
+// (it has begun to shut down and drops the connection), the request is held instead and answered here, in full,
+// once the data is handed over. A copy that is stopping finishes requests it has started, so an error before any
+// answer means the old copy did not act on it.
 function passOn(req, res) {
-  const i = oldAddr.lastIndexOf(':');
-  const up = http.request({ host: oldAddr.slice(0, i), port: Number(oldAddr.slice(i + 1)), method: req.method, path: req.url, headers: req.headers, agent: false });
-  let connected = false;
-  up.on('socket', (sock) => sock.once('connect', () => { connected = true; req.pipe(up); }));
-  up.on('response', (r) => { res.writeHead(r.statusCode, r.statusMessage, r.rawHeaders); r.pipe(res); });
-  up.on('error', () => {
-    if (!connected) return hold(req, res); // nothing was sent: answer it here after the hand-over
-    if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'The app was updating. Please try again.' })); }
-    else res.destroy();
+  const body = [];
+  req.on('data', (d) => body.push(d));
+  req.on('end', () => {
+    const buf = Buffer.concat(body);
+    const i = oldAddr.lastIndexOf(':');
+    const up = http.request({ host: oldAddr.slice(0, i), port: Number(oldAddr.slice(i + 1)), method: req.method, path: req.url, headers: req.headers, agent: false });
+    let answered = false;
+    up.on('response', (r) => { answered = true; res.writeHead(r.statusCode, r.statusMessage, r.rawHeaders); r.pipe(res); });
+    up.on('error', () => {
+      if (!answered) return hold(withBody(req, buf), res); // the old copy never answered: answer it here after the hand-over
+      res.destroy();
+    });
+    res.on('close', () => { if (!res.writableFinished) up.destroy(); });
+    up.end(buf);
   });
-  res.on('close', () => { if (!res.writableFinished) up.destroy(); });
+}
+// The original request's body was already read; this gives the app a request that yields that body again.
+function withBody(req, buf) {
+  const r = Readable.from(buf.length ? [buf] : []);
+  for (const k of ['method', 'url', 'headers', 'rawHeaders', 'httpVersion', 'httpVersionMajor', 'httpVersionMinor', 'socket', 'connection', 'trailers', 'rawTrailers', 'aborted', 'complete']) {
+    try { r[k] = req[k]; } catch { /* read-only */ }
+  }
+  return r;
 }
 
 const PORT = Number(process.env.PORT || 3000);

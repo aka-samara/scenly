@@ -25,8 +25,9 @@ check(passed === 200 && Date.now() - t0 < 1500, `request to the waiting new copy
 const viaNew = await reg(3302, 'vianew@t.local'); // a sign-up made through the new copy before it took over
 await sleep(1500);
 A.kill('SIGTERM');
-t0 = Date.now(); const heldStatus = await me(3302, late);
+t0 = Date.now(); const [heldStatus, switchReg] = await Promise.all([me(3302, late), reg(3302, 'switch@t.local').catch((e) => 'ERR ' + e.message)]);
 check(heldStatus === 200, `request during the switch is answered after hand-over, signed in (${heldStatus}, ${Date.now() - t0} ms)`);
+check(typeof switchReg === 'string' && !switchReg.startsWith('ERR') && (await me(3302, switchReg)) === 200, `sign-up (a POST with a body) sent during the switch is answered and kept (${String(switchReg).slice(0, 40)})`);
 check((await me(3302, viaNew)) === 200, 'sign-up passed through the new copy while it waited is kept');
 check((await me(3302, early)) === 200, 'sign-in from before the deploy still works on the new copy');
 check((await me(3302, late)) === 200, 'sign-in made on the old copy during the deploy works on the new copy');
