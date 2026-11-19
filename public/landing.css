@@ -177,6 +177,41 @@
 .lp-step small { color: var(--muted); font-size: 14px; line-height: 1.55; }
 #lp-how .lp-models { justify-content: center; margin-top: 26px; }
 
+/* All models (opens from "See all models" under How it works) */
+.lp-dir-wrap { scroll-margin-top: 72px; }
+.lp-dir-cta { display: flex; justify-content: center; margin-top: 16px; }
+.lp-dir-toggle .i { width: 15px; height: 15px; transition: transform .2s; }
+.lp-dir-toggle.open .i { transform: rotate(180deg); }
+.lp-dir { margin-top: 22px; scroll-margin-top: 72px; }
+.lp-dir[hidden] { display: none; }
+.lp-dir-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.lp-dir-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.lp-dir-tabs::-webkit-scrollbar { display: none; }
+.lp-dir-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 9px; color: var(--muted); font-weight: 600; font-size: 13.5px; white-space: nowrap; flex: none; }
+.lp-dir-tabs button span { font-size: 11.5px; color: var(--faint); font-weight: 600; }
+.lp-dir-tabs button:hover { color: var(--text); }
+.lp-dir-tabs button.on { background: var(--panel-3); color: var(--text); }
+.lp-dir-search { flex: 1; min-width: 200px; max-width: 320px; margin-left: auto; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+.lp-dir-search:focus-within { border-color: rgba(67, 97, 238, .6); }
+.lp-dir-search .i { width: 16px; height: 16px; flex: none; }
+.lp-dir-search input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: 0; color: var(--text); font: inherit; font-size: 14px; }
+.lp-dir-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.lp-dir-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); min-width: 0; contain: content; }
+.lp-dir-card:hover { border-color: var(--line-2); }
+.lp-dir-top { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.lp-dir-top .logo { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex: none; font-weight: 800; font-size: 12px; }
+.lp-dir-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.lp-dir-top .btn { flex: none; }
+.lp-dir-name b { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.lp-dir-name small { color: var(--faint); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-dir-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-dir-tags .tag { height: 22px; padding: 0 8px; font-size: 11.5px; }
+.lp-kind { background: rgb(var(--ink) / .07); color: var(--text-2); }
+.lp-kind.k-image { background: rgba(4, 217, 255, .12); color: #04b8d9; }
+.lp-kind.k-video { background: rgba(255, 79, 109, .12); color: #ff6b85; }
+.lp-dir-card p { margin: 0; flex: 1; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.lp-dir-empty { text-align: center; color: var(--muted); padding: 24px 0; margin: 0; }
+
 /* AI apps */
 .lp-more { text-align: center; color: var(--muted); margin: 18px 0 0; font-size: 14px; }
 .lp-more a, .lp-faq a { color: var(--accent); text-decoration: none; font-weight: 600; }
@@ -284,4 +319,12 @@
   .lp-end-btns { flex-direction: column; width: 100%; }
   .lp-end-btns .btn { width: 100%; height: 44px; }
   .lp .app-grid { gap: 10px; }
+  .lp-dir-bar { flex-direction: column; align-items: stretch; }
+  .lp-dir-tabs button { flex: 1; justify-content: center; padding: 0 8px; }
+  .lp-dir-search { max-width: none; margin-left: 0; min-width: 0; }
+  .lp-dir-search input { font-size: 16px; }
+  .lp-dir-grid { grid-template-columns: 1fr; gap: 10px; }
+  .lp-dir-card { padding: 14px; gap: 9px; }
+  .lp-dir-top .btn { height: 34px; }
+  .lp-dir-toggle { width: 100%; height: 44px; }
 }
