@@ -306,9 +306,9 @@ const PROVIDER_STYLE = [
 // Provider icons, the same ones the gateway's pricing page uses (copied into /icons/providers).
 const PROVIDER_ICON = {
   deepseek: 'deepseek.svg', bytedance: 'bytedance.png', 'z.ai': 'zai.png', 'moonshot-ai': 'kimi.png', xiaomi: 'xiaomi.png',
-  alibaba: 'qwen.png', tencent: 'tencent.png', anthropic: 'anthropic.png', google: 'google.png', openai: 'openai.svg', xai: 'xai.png',
+  alibaba: 'qwen.png', tencent: 'tencent.png', anthropic: 'anthropic.png', google: 'google.png', openai: 'openai.svg', xai: 'xai.png', minimax: 'minimax.png',
 };
-const ICON_RULES = [[/gpt|openai/i, 'openai'], [/claude|anthropic/i, 'anthropic'], [/gemini|nano-banana|google/i, 'google'], [/qwen|alibaba|wan/i, 'alibaba'], [/mimo|xiaomi/i, 'xiaomi'], [/kimi|moonshot/i, 'moonshot-ai'], [/glm|zhipu|z\.ai/i, 'z.ai'], [/seedance|seedream|doubao|bytedance|volcano/i, 'bytedance'], [/hunyuan|\bhy[\s-]|tencent/i, 'tencent'], [/deepseek/i, 'deepseek'], [/grok|\bxai\b/i, 'xai']];
+const ICON_RULES = [[/gpt|openai/i, 'openai'], [/claude|anthropic/i, 'anthropic'], [/gemini|nano-banana|google/i, 'google'], [/qwen|alibaba|wan/i, 'alibaba'], [/mimo|xiaomi/i, 'xiaomi'], [/kimi|moonshot/i, 'moonshot-ai'], [/glm|zhipu|z\.ai/i, 'z.ai'], [/seedance|seedream|doubao|bytedance|volcano/i, 'bytedance'], [/hunyuan|\bhy[\s-]|tencent/i, 'tencent'], [/deepseek/i, 'deepseek'], [/grok|\bxai\b/i, 'xai'], [/minimax|hailuo|abab/i, 'minimax']];
 function providerIcon(m) {
   if (!m) return null;
   if (PROVIDER_ICON[m.parent]) return '/icons/providers/' + PROVIDER_ICON[m.parent];

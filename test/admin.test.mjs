@@ -55,3 +55,17 @@ test('status follows the subscription and the plan history', () => {
   assert.equal(userStatus(u), 'cancelled');
   assert.deepEqual(u.planHistory.map((x) => x.kind), ['subscribed', 'downgraded', 'cancelled']);
 });
+
+test('with a live Stripe key only live payments count as revenue; test and demo ones are set apart', async () => {
+  const { realPayment } = await import('../server/admin.js');
+  const before = process.env.STRIPE_SECRET_KEY;
+  const demo = { status: 'paid', mode: 'demo', amountUsd: 20 };
+  assert.equal(realPayment(demo), !/^sk_live_/.test(before || ''), 'without a live key everything counts, as before');
+  process.env.STRIPE_SECRET_KEY = 'sk_live_test_only';
+  try {
+    assert.equal(realPayment(demo), false);
+    assert.equal(realPayment({ status: 'paid', mode: 'stripe', live: false, amountUsd: 20 }), false);
+    assert.equal(realPayment({ status: 'paid', mode: 'stripe', live: true, amountUsd: 20 }), true);
+    assert.equal(realPayment({ status: 'pending', mode: 'stripe', live: true, amountUsd: 20 }), false);
+  } finally { if (before === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = before; }
+});

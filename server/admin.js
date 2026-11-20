@@ -1,6 +1,7 @@
 // Admin module: users, plans and subscriptions, usage by model and area, promo credits, bans,
 // analytics and the gateway/model error log. Every route here needs an admin account (ADMIN_EMAILS).
 // The older /api/admin/stats and /api/admin/health routes stay where they were (index.js, prod.js).
+import crypto from 'node:crypto';
 import db, { save, id, now } from './db.js';
 import { PLANS, grant, round2 } from './credits.js';
 import { isAdminEmail, isPaid } from './auth.js';
@@ -8,7 +9,7 @@ import { subsOn, stripeReady, stripe, syncUser, setCancel, switchPlan, planById,
 import { KINDS as DOC_KINDS } from './docs/kinds/index.js';
 import { flags } from './flags.js';
 import { mailReady } from './mail.js';
-import { CREDIT_USD, MARGIN_PCT, MASTER_DISCOUNT_PCT, markupFor } from './credits.js';
+import { CREDIT_USD, MARGIN_PCT, MASTER_DISCOUNT_PCT, markupFor, markupOf } from './credits.js';
 import { getCatalog } from './catalog.js';
 
 db.adminAudit ||= [];
@@ -17,6 +18,24 @@ const LIVE = ['active', 'trialing', 'past_due'];
 const r4 = (n) => Math.round(n * 1e4) / 1e4;
 const ms = (iso) => (iso ? Date.parse(iso) : 0);
 const dayKey = (t) => new Date(t).toISOString().slice(0, 10);
+
+// ---------- real money only ----------
+// With a live Stripe key, revenue, MRR and "paying" count only money that really arrived. Payments made in demo
+// mode or with a Stripe test key (before go-live, or on a laptop whose data was brought over) are kept in each
+// person's history but left out of the totals. Each paid row is marked once, under the key that took it.
+const liveStripe = () => /^sk_live_/.test(process.env.STRIPE_SECRET_KEY || '');
+const keyTag = () => crypto.createHash('sha256').update(process.env.STRIPE_SECRET_KEY || 'demo').digest('hex').slice(0, 10); // same tag as server/billing.js
+function markPayments() {
+  if (!liveStripe()) return;
+  const tag = keyTag(); let n = 0; const tags = new Map(db.users.map((u) => [u.id, u.stripeKeyTag]));
+  for (const p of db.payments) if (p.status === 'paid' && p.live === undefined) { p.live = p.mode === 'stripe' && !/^cs_test_/.test(p.stripeSession || '') && tags.get(p.userId) === tag; n++; }
+  if (n) save();
+}
+export const realPayment = (p) => p.status === 'paid' && (!liveStripe() || p.live === true);
+const realSub = (u) => !liveStripe() || (!u.sub?.demo && u.stripeKeyTag === keyTag());
+// What a spend cost at AICredit when the row carries no cost of its own (video holds, Video Builder, Studio Pro):
+// the credits charged, turned back into dollars without the margin.
+const costOf = (credits, model) => (credits * CREDIT_USD()) / markupOf(model || undefined);
 
 // ---------- areas of the app (what a credit was spent on) ----------
 export const AREAS = [
@@ -45,9 +64,10 @@ export function areaOf(l) {
 const nameIn = (d) => { const m = /^(?:Video Builder scene|Video \(reserved\)|Video settle|Image(?: ×\d+)?|Chat|Code) · ([^:]+?)(?: \(reserved\))?(?::.*)?$/.exec(String(d || '')); return m ? m[1].trim() : null; };
 /** Every spend row (usage and refunds, netted), with its area and model. Refunds take the area of what they refund. */
 function spendRows() {
+  markPayments();
   const byHold = new Map(), byTask = new Map();
   for (const l of db.ledger) if (l.type === 'usage') {
-    const a = { area: areaOf(l), model: l.model || nameIn(l.desc) };
+    const a = { area: areaOf(l), model: l.model || nameIn(l.desc), est: !(l.usd > 0) };
     if (l.holdId && !byHold.has(l.holdId)) byHold.set(l.holdId, a);
     if (l.taskId && !byTask.has(l.taskId)) byTask.set(l.taskId, a);
   }
@@ -56,7 +76,12 @@ function spendRows() {
     if (l.type !== 'usage' && l.type !== 'refund') continue;
     const linked = (l.holdId && byHold.get(l.holdId)) || (l.taskId && byTask.get(l.taskId)) || null;
     const area = l.type === 'usage' && !linked ? areaOf(l) : linked?.area || areaOf(l);
-    out.push({ userId: l.userId, t: ms(l.at), credits: -l.credits, usd: l.type === 'usage' ? l.usd || 0 : 0, area, model: l.model || linked?.model || nameIn(l.desc) });
+    const model = l.model || linked?.model || nameIn(l.desc);
+    // Cost: the gateway's own figure when the row has one; otherwise worked out from the credits. A refund takes
+    // back the estimated cost of what it refunds (a job that failed cost nothing).
+    const est = l.type === 'usage' ? !(l.usd > 0) : !!linked?.est;
+    const usd = l.type === 'usage' ? (est ? costOf(-l.credits, model) : l.usd) : est ? costOf(-l.credits, model) : 0;
+    out.push({ userId: l.userId, t: ms(l.at), credits: -l.credits, usd, usdEst: est ? usd : 0, area, model });
   }
   return out;
 }
@@ -103,7 +128,9 @@ function userRow(u, rows) {
     createdAt: u.createdAt, upgradedAt: up.first, lastUpgradeAt: up.last, lastActive: lastActive(u, mine),
     credits: round2(u.credits || 0), used: round2(mine.reduce((n, r) => n + r.credits, 0)), used30: round2(mine.filter((r) => r.t >= cut).reduce((n, r) => n + r.credits, 0)),
     apiUsd: r4(mine.reduce((n, r) => n + r.usd, 0)),
-    paidUsd: round2(db.payments.filter((p) => p.userId === u.id && p.status === 'paid').reduce((n, p) => n + (p.amountUsd || 0), 0)),
+    paidUsd: round2(db.payments.filter((p) => p.userId === u.id && realPayment(p)).reduce((n, p) => n + (p.amountUsd || 0), 0)),
+    testUsd: round2(db.payments.filter((p) => p.userId === u.id && p.status === 'paid' && !realPayment(p)).reduce((n, p) => n + (p.amountUsd || 0), 0)),
+    testPlan: !!(u.sub && LIVE.includes(u.sub.status) && u.plan !== 'free' && !realSub(u)),
     signIn: u.googleId ? (u.passHash ? 'google+password' : 'google') : 'password', verified: u.emailVerified !== false,
     renewsAt: u.sub && LIVE.includes(u.sub.status) && !u.sub.cancelAtPeriodEnd ? u.sub.currentPeriodEnd : null,
     endsAt: u.sub?.cancelAtPeriodEnd ? u.sub.cancelAt || u.sub.currentPeriodEnd : null,
@@ -119,7 +146,7 @@ function userDetail(u) {
     user: userRow(u, rows),
     sub: u.sub || null, card: u.card || null, stripeCustomer: u.stripeCustomerId || null, openInvoices: u.openInvoices || [],
     planHistory: [...(u.planHistory || [])].reverse(),
-    payments: db.payments.filter((p) => p.userId === u.id && p.status === 'paid').map((p) => ({ at: p.paidAt || p.createdAt, kind: p.kind, reason: p.reason || null, offer: p.offerId, amountUsd: p.amountUsd, credits: p.credits || 0, mode: p.mode, number: p.invoiceNumber || null })).reverse(),
+    payments: db.payments.filter((p) => p.userId === u.id && p.status === 'paid').map((p) => ({ at: p.paidAt || p.createdAt, kind: p.kind, reason: p.reason || null, offer: p.offerId, amountUsd: p.amountUsd, credits: p.credits || 0, mode: realPayment(p) ? p.mode : p.mode === 'demo' ? 'demo' : 'test', number: p.invoiceNumber || null })).reverse(),
     byArea: AREAS.map((a) => ({ ...a, ...(byArea[a.id] || { credits: 0, usd: 0, calls: 0 }) })).filter((a) => a.credits || a.calls),
     byModel: Object.entries(byModel).map(([model, v]) => ({ model, ...v })).sort((a, b) => b.credits - a.credits),
     ledger,
@@ -137,7 +164,9 @@ function overview(days) {
   const t = Date.now(), cut = t - days * DAY, prevCut = cut - days * DAY;
   const rows = spendRows();
   const inRange = rows.filter((r) => r.t >= cut);
-  const paid = db.payments.filter((p) => p.status === 'paid');
+  markPayments();
+  const paid = db.payments.filter(realPayment);
+  const testPaid = db.payments.filter((p) => p.status === 'paid' && !realPayment(p));
   const payT = (p) => ms(p.paidAt || p.createdAt);
   const series = {};
   for (let d = 0; d < days; d++) series[dayKey(cut + (d + 1) * DAY)] = { signups: 0, revenue: 0, credits: 0, usd: 0, active: new Set(), areas: {} };
@@ -146,11 +175,13 @@ function overview(days) {
   for (const r of inRange) { const s = series[dayKey(r.t)]; if (!s) continue; s.credits += r.credits; s.usd += r.usd; s.active.add(r.userId); s.areas[r.area] = (s.areas[r.area] || 0) + r.credits; }
   const statuses = {}, plans = {};
   for (const u of db.users) { const st = userStatus(u); statuses[st] = (statuses[st] || 0) + 1; plans[u.plan || 'free'] = (plans[u.plan || 'free'] || 0) + 1; }
-  const live = db.users.filter((u) => u.sub && LIVE.includes(u.sub.status) && !u.sub.paused && u.plan !== 'free');
+  const subscribed = db.users.filter((u) => u.sub && LIVE.includes(u.sub.status) && !u.sub.paused && u.plan !== 'free');
+  const live = subscribed.filter(realSub);
   const mrr = live.reduce((n, u) => n + (planById(u.plan)?.priceUsd || 0), 0);
   const rev = (a, b) => round2(paid.filter((p) => payT(p) >= a && payT(p) < b).reduce((n, p) => n + (p.amountUsd || 0), 0));
   const creditsIn = (a, b) => round2(rows.filter((r) => r.t >= a && r.t < b).reduce((n, r) => n + r.credits, 0));
   const usdIn = (a, b) => r4(rows.filter((r) => r.t >= a && r.t < b).reduce((n, r) => n + r.usd, 0));
+  const apiUsdEst = r4(inRange.reduce((n, r) => n + r.usdEst, 0));
   const active = (a) => new Set(rows.filter((r) => r.t >= a).map((r) => r.userId)).size;
   const calls = db.monitor.calls.filter((c) => c.t >= t - DAY);
   const byArea = sumBy(inRange, 'area'), byModel = sumBy(inRange, 'model');
@@ -162,6 +193,7 @@ function overview(days) {
     kpis: {
       users: db.users.length, newUsers: db.users.filter((u) => ms(u.createdAt) >= cut).length, newUsersPrev: db.users.filter((u) => ms(u.createdAt) >= prevCut && ms(u.createdAt) < cut).length,
       paying: live.length, mrr: round2(mrr), revenue: rev(cut, t + 1), revenuePrev: rev(prevCut, cut), revenueAll: round2(paid.reduce((n, p) => n + (p.amountUsd || 0), 0)),
+      testRevenue: round2(testPaid.reduce((n, p) => n + (p.amountUsd || 0), 0)), testPaying: subscribed.length - live.length, apiUsdEst,
       creditsCharged: charged, creditsChargedPrev: creditsIn(prevCut, cut), apiUsd, chargedUsd: round2(charged * creditUsd),
       margin: charged * creditUsd > 0 ? Math.round((1 - apiUsd / (charged * creditUsd)) * 1000) / 10 : null,
       creditsOutstanding: round2(db.users.reduce((n, u) => n + (u.credits || 0), 0)),
