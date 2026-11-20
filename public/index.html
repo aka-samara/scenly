@@ -24,6 +24,22 @@
   <link rel="stylesheet" href="/mobile.css" />
   <link rel="stylesheet" href="/landing.css" />
   <link id="help-css" rel="stylesheet" href="/help.css" />
+  <!-- The app's script files are fetched together, straight away, instead of one after another as each one asks for the next. -->
+  <link rel="modulepreload" href="/app.js" />
+  <link rel="modulepreload" href="/docs.js" />
+  <link rel="modulepreload" href="/voice.js" />
+  <link rel="modulepreload" href="/expand.js" />
+  <link rel="modulepreload" href="/resize.js" />
+  <link rel="modulepreload" href="/enhance.js" />
+  <link rel="modulepreload" href="/legal.js" />
+  <link rel="modulepreload" href="/landing.js" />
+  <link rel="modulepreload" href="/docs-sheet.js" />
+  <link rel="modulepreload" href="/docs-pdf.js" />
+  <link rel="modulepreload" href="/docs-slides.js" />
+  <link rel="modulepreload" href="/mobile-nav.js" />
+  <link rel="preload" as="style" href="/enhance.css" />
+  <link rel="preload" as="style" href="/expand.css" />
+  <link rel="preload" as="style" href="/resize.css" />
 </head>
 <body>
   <div id="app"></div>

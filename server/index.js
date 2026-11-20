@@ -70,14 +70,17 @@ app.use(trackRequest); // lets charges and gateway calls know which page they ca
 
 // ---------- static ----------
 const nm = path.join(here, '..', 'node_modules');
-app.use('/vendor/marked.js', express.static(path.join(nm, 'marked/marked.min.js')));
-app.use('/vendor/purify.js', express.static(path.join(nm, 'dompurify/dist/purify.min.js')));
-app.use('/vendor/hljs.js', express.static(path.join(nm, '@highlightjs/cdn-assets/highlight.min.js')));
-app.use('/vendor/hljs-light.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github.min.css')));
-app.use('/vendor/hljs-dark.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github-dark.min.css')));
+// Library files only change with a deploy that updates the package: a day in the browser and at Cloudflare's edge.
+const lib = { maxAge: '1d' };
+app.use('/vendor/marked.js', express.static(path.join(nm, 'marked/marked.min.js'), lib));
+app.use('/vendor/purify.js', express.static(path.join(nm, 'dompurify/dist/purify.min.js'), lib));
+app.use('/vendor/hljs.js', express.static(path.join(nm, '@highlightjs/cdn-assets/highlight.min.js'), lib));
+app.use('/vendor/hljs-light.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github.min.css'), lib));
+app.use('/vendor/hljs-dark.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github-dark.min.css'), lib));
 app.use('/vendor/builder-plan.js', express.static(path.join(here, 'builder', 'plan.js'))); // the same timeline maths in the browser and on the server
 // App code must revalidate (cheap 304 via ETag): without this Cloudflare gives browsers a 4 hour cache and a deploy reaches people hours late.
-const noCache = (res, file) => { if (/\.(html|js|css|mjs)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache'); };
+// Icons, logos and other pictures keep for a day, so a visit does not ask the server for each of them again.
+const noCache = (res, file) => { if (/\.(html|js|css|mjs)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache'); else if (/\.(png|jpe?g|webp|svg|gif|ico|woff2?)$/i.test(file)) res.setHeader('Cache-Control', 'public, max-age=86400'); };
 app.use(express.static(path.join(here, '..', 'public'), { setHeaders: noCache }));
 // Plain links for app stores and sign-in providers (Google OAuth branding): /privacy and /terms open the legal pages.
 for (const k of ['privacy', 'terms']) app.get('/' + k, (req, res) => res.redirect(302, '/#/' + k));
@@ -188,7 +191,9 @@ app.patch('/api/me', requireUser, (req, res) => {
 // ---------- conversations ----------
 app.get('/api/conversations', requireUser, (req, res) => {
   // Sessions that a Studio Pro agent run or an Ad Studio brand fills are listed once, under that run or brand.
-  const list = db.conversations.filter((c) => c.userId === req.user.id && !c.hideInRecents).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(convSummary);
+  // A chat whose first answer failed holds no messages; it is left out once it is clearly not being retried.
+  const dead = (c) => (c.kind || 'chat') === 'chat' && !c.messages?.length && Date.now() - Date.parse(c.updatedAt) > 10 * 60e3;
+  const list = db.conversations.filter((c) => c.userId === req.user.id && !c.hideInRecents && !dead(c)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(convSummary);
   res.json({ conversations: list });
 });
 app.get('/api/conversations/:id', requireUser, (req, res) => {
@@ -932,6 +937,19 @@ app.get('/api/admin/stats', requireUser, requireAdmin, (_req, res) => {
 mountHealth(app, { requireUser, requireAdmin });
 mountAdmin(app, { requireUser, requireAdmin, wrap });
 app.get(/^\/(?!api\/|p\/|healthz$).*/, (_req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(here, '..', 'public', 'index.html')));
+
+// Last stop for anything a route did not handle itself (a broken JSON body, an upload cut short, a bug):
+// answer in the app's own JSON shape, never with a stack trace, and keep serving.
+app.use((err, req, res, _next) => {
+  const status = err?.status >= 400 && err?.status < 500 ? err.status : 500;
+  if (status === 500) { console.error(err); recordFailure({ kind: 'server', path: `${req.method} ${req.path}`, status: 500, reason: `${err?.name || 'Error'}: ${err?.message || err}`, userId: req.user?.id }); }
+  if (res.headersSent) return res.end();
+  res.status(status).json(status === 500 ? { error: 'Something went wrong on our side. No credits were charged. Please try again.', code: 'server_error' }
+    : { error: err.type === 'entity.too.large' ? 'That is too much to send at once. Please shorten it and try again.' : 'We could not read that request. Please try again.', code: 'bad_request' });
+});
+// One failed background step (an email, a poll, a file copy) must never stop the app for everyone.
+process.on('unhandledRejection', (e) => { console.error('[unhandled]', e); try { recordFailure({ kind: 'server', path: 'background', status: 500, reason: `${e?.name || 'Error'}: ${e?.message || e}` }); } catch { /* logging only */ } });
+process.on('uncaughtException', (e) => { console.error('[uncaught]', e); try { recordFailure({ kind: 'server', path: 'background', status: 500, reason: `${e?.name || 'Error'}: ${e?.message || e}` }); } catch { /* logging only */ } });
 
 const PORT = Number(process.env.PORT || 3000);
 const server = serve(app); // already listening (server/handover.js), so a deploy never drops or loses requests

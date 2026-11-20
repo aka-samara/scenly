@@ -239,6 +239,9 @@ export async function googleCallback(req, res) {
     if (!ur.ok || !g.sub || !validEmail(email) || g.email_verified === false) return fail('no verified email');
     let user = db.users.find((u) => u.googleId === g.sub) || db.users.find((u) => u.email === email);
     if (!user) user = newUser({ email, name: String(g.name || '').slice(0, 60), googleId: g.sub, verified: true });
+    // A sign-up with this address that was never confirmed may have been made by someone else: its password
+    // must not open the account once the real owner arrives with Google.
+    if (user.emailVerified === false && !user.googleId) { delete user.passHash; delete user.salt; endSessions(user); }
     user.googleId = g.sub;
     if (user.banned) return res.redirect('/?auth=banned#/login');
     if (user.emailVerified === false) clearVerify(user);
@@ -255,7 +258,9 @@ export function logout(req, res) {
 }
 
 export function parseCookies(req, _res, next) {
-  req.cookies = Object.fromEntries((req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join('='))]));
+  // A cookie with a broken % sequence (set by anything else on this domain) must not fail the whole request.
+  const dec = (v) => { try { return decodeURIComponent(v); } catch { return v; } };
+  req.cookies = Object.fromEntries((req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0]).map(([k, ...v]) => [k, dec(v.join('='))]));
   next();
 }
 
