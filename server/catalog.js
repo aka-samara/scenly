@@ -16,7 +16,9 @@ let cache = { at: 0, models: [] };
 export const RES_PIXELS = { '480p': [854, 480], '720p': [1280, 720], '1080p': [1920, 1080], '4K': [3840, 2160] };
 const VIDEO_FPS = 24;
 const TYPICAL_IMAGE_TOKENS = 1300; // token-billed image models, one 1024px image
-const TYPICAL_MSG = { input: 1500, output: 700 };
+// A typical chat reply, measured on real Scenly chats (2026-11-20, 119 replies: median 3,229 tokens in, 1,345 out).
+// Input grows as a chat goes on because the earlier messages are sent again. The model menus and plan guides use it.
+export const TYPICAL_MSG = { input: 3000, output: 1300 };
 
 const num = (v) => (v == null ? null : Number(v));
 

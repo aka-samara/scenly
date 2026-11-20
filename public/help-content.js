@@ -141,7 +141,7 @@ ${go('#/help/account', 'Change your password or add one')}`,
 <li><b>Chat and documents</b>: by the length of the question and the answer. A reply is capped so it can never cost more than your balance. The cost shows under each answer.</li>
 <li><b>Pictures</b>: charged when each picture arrives.</li>
 <li><b>Videos</b>: the estimate is <b>reserved</b> when you press Generate, then settled to the real cost when the video is done. Any unused part comes back.</li>
-<li><b>Prompt enhancer</b>: well under 1 credit per press.</li>
+<li><b>Prompt enhancer</b>: usually under 1 credit per press.</li>
 <li><b>Free</b>: uploads, the Video Builder export, Resize and Upscale in the image editor, and clips or music you upload yourself.</li>
 </ul>
 <h2 id="refunds">Failed work is refunded</h2>
@@ -678,7 +678,7 @@ ${go('#/assets', 'Open Assets')}`,
 <p>In Image, when a photo is attached, it reads the photo too.</p>
 <h2 id="auto">Auto-enhance (Image and Video)</h2>
 <p>Open the small arrow next to the sparkle and turn on <b>Auto-enhance when I press Generate</b>. Every prompt is then improved before it is generated, and the bar shows <b>Auto</b>. Turn it off the same way.</p>
-<p>It never runs by itself unless Auto-enhance is on. One press costs well under 1 credit.</p>`,
+<p>It never runs by itself unless Auto-enhance is on. One press costs usually under 1 credit.</p>`,
   },
   {
     id: 'voice-input', cat: 'tools', title: 'Voice input',
