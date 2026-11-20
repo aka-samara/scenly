@@ -80,7 +80,9 @@ app.use('/vendor/hljs-dark.css', express.static(path.join(nm, '@highlightjs/cdn-
 app.use('/vendor/builder-plan.js', express.static(path.join(here, 'builder', 'plan.js'))); // the same timeline maths in the browser and on the server
 // App code must revalidate (cheap 304 via ETag): without this Cloudflare gives browsers a 4 hour cache and a deploy reaches people hours late.
 // Icons, logos and other pictures keep for a day, so a visit does not ask the server for each of them again.
-const noCache = (res, file) => { if (/\.(html|js|css|mjs)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache'); else if (/\.(png|jpe?g|webp|svg|gif|ico|woff2?)$/i.test(file)) res.setHeader('Cache-Control', 'public, max-age=86400'); };
+// Cloudflare may answer for app code from its own copy for one minute (CDN-Cache-Control is read by Cloudflare only),
+// so browsers far from the server check with a nearby edge instead of the server; a deploy shows within a minute.
+const noCache = (res, file) => { if (/\.(html|js|css|mjs)$/i.test(file)) { res.setHeader('Cache-Control', 'no-cache'); if (!/\.html$/i.test(file)) res.setHeader('CDN-Cache-Control', 'max-age=60'); } else if (/\.(png|jpe?g|webp|svg|gif|ico|woff2?)$/i.test(file)) res.setHeader('Cache-Control', 'public, max-age=86400'); };
 app.use(express.static(path.join(here, '..', 'public'), { setHeaders: noCache }));
 // Plain links for app stores and sign-in providers (Google OAuth branding): /privacy and /terms open the legal pages.
 for (const k of ['privacy', 'terms']) app.get('/' + k, (req, res) => res.redirect(302, '/#/' + k));
