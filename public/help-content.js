@@ -179,7 +179,7 @@ ${go('#/billing', 'See your balance and history')}`,
 <h2 id="see">Where to see it</h2>
 <p>The <a href="#/billing">Plans &amp; credits</a> page shows your plan credits and when they expire, each top-up with its expiry date, and your free credits. Your credit history lists every charge, refund and expiry.</p>
 <h2 id="before">Credits from before these rules</h2>
-<p>Credits you already had when these rules started on 20 November 2026 were all kept. Credits you paid for show as <b>Carried-over credits</b> and count as paid credits, and free credits stay free credits.</p>
+<p>Credits you already had when these rules started on 20 November 2026 were all kept. Credits you paid for show as <b>Carried-over credits</b>: they count as paid credits and are valid for 90 days from the day the rules started, like a top-up. Free credits stay free credits.</p>
 ${go('#/billing', 'See your credits')}`,
   },
   {

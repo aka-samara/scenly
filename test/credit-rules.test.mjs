@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-rules-'));
-delete process.env.CARRY_CREDIT_DAYS;
+process.env.CARRY_CREDIT_DAYS = '0'; // the move test checks the no-expiry path; the default is tested below
 const { default: db } = await import('../server/db.js');
 const C = await import('../server/credits.js');
 const W = await import('../server/wallet.js');
@@ -171,10 +171,10 @@ test('moving old balances: totals never change, nothing is lost, it runs once', 
   for (const u of [paid, subd, free, neg, zero]) assert.equal(ledgerSum(u), 0, 'the move adds only zero-credit history rows');
 });
 
-test('CARRY_CREDIT_DAYS gives carried-over credits an end date', () => {
-  process.env.CARRY_CREDIT_DAYS = '90';
+test('by default carried-over paid credits expire 90 days after the switch', () => {
+  delete process.env.CARRY_CREDIT_DAYS;
   const u = mk({ credits: 500 }); db.payments.push({ id: 'p_old2', userId: u.id, status: 'paid', amountUsd: 5 });
-  C.ensure(u); delete process.env.CARRY_CREDIT_DAYS;
+  C.ensure(u); process.env.CARRY_CREDIT_DAYS = '0';
   assert.equal(Math.round((Date.parse(u.wallet.packs[0].expiresAt) - Date.now()) / DAY), 90);
 });
 

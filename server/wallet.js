@@ -18,8 +18,9 @@ export const PACK_DAYS = () => { const v = Number(process.env.PACK_VALID_DAYS ??
 // After a period ends, how long plan credits wait for the renewal payment before they expire anyway
 // (Stripe takes up to about an hour to charge a renewal). A renewal that arrives replaces them at once.
 export const SUB_GRACE_MS = () => { const v = Number(process.env.SUB_CREDIT_GRACE_HOURS ?? 6); return (Number.isFinite(v) && v >= 0 ? v : 6) * 3600e3; };
-// Credits held before these rules: null = never expire (the default; they were sold as never expiring).
-export const CARRY_DAYS = () => { const v = Number(process.env.CARRY_CREDIT_DAYS || 0); return Number.isFinite(v) && v > 0 ? v : null; };
+// Paid credits held before these rules expire this many days after the switch (default 90, the owner's choice of
+// 2026-11-20). CARRY_CREDIT_DAYS=0 or 'never' keeps them with no end date.
+export const CARRY_DAYS = () => { const raw = String(process.env.CARRY_CREDIT_DAYS ?? '').trim(); if (raw === '') return 90; const v = Number(raw); return Number.isFinite(v) && v > 0 ? v : null; };
 
 const r4 = (n) => Math.round(n * 1e4) / 1e4;
 const ms = (iso) => (iso ? Date.parse(iso) : Infinity);
