@@ -1,9 +1,9 @@
 // Scenly admin console: overview analytics, users and subscriptions, usage by area and model,
 // model / gateway error log with performance stats, admin activity and system settings.
 // Loaded only when an admin opens #/admin. Every call goes to /api/admin/*, which checks ADMIN_EMAILS on the server.
-import { h, $, icon, S, api, toast, errToast, dialog, field, topbar, fmtCredits, byId, shortName, modelLogo } from './app.js';
+import { h, pageCss, $, icon, S, api, toast, errToast, dialog, field, topbar, fmtCredits, byId, shortName, modelLogo } from './app.js';
 
-if (!$('#admin-css')) document.head.append(h('link', { id: 'admin-css', rel: 'stylesheet', href: '/admin.css' }));
+await pageCss('admin-css', '/admin.css'); // drawn only once its stylesheet is in
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'chart' },
