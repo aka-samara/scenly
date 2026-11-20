@@ -146,7 +146,7 @@ const S = {
 };
 S.studio.image.busy = S.studio.video.busy = false;
 const saveStudio = (mode) => { const { refs, videoUrl, busy, creating, ...rest } = S.studio[mode]; store.set('studio-' + mode, rest); };
-const byId = (mid) => S.models.find((m) => m.id === mid);
+const byId = (mid) => S.models.find((m) => m.id === mid) || (S.modelAliases?.[mid] ? S.models.find((m) => m.id === S.modelAliases[mid]) : undefined); // a hidden duplicate id finds the model that is shown
 const chatModel = () => byId(S.chatModelId) || S.models.find((m) => m.type === 'chat') || S.models[0];
 const studioModel = (mode) => { const st = S.studio[mode]; let m = byId(st.modelId); if (!m || m.type !== mode) { m = S.models.find((x) => x.type === mode); if (m) st.modelId = m.id; } return m; };
 const fmtCredits = (n) => (n == null ? '–' : n >= 100 ? Math.round(n).toLocaleString() : n >= 10 ? (Math.round(n * 10) / 10).toString() : n >= 1 ? n.toFixed(1).replace(/\.0$/, '') : n >= 0.01 ? n.toFixed(2) : n > 0 ? '<0.01' : '0');
@@ -500,7 +500,7 @@ window.addEventListener('hashchange', () => { if (S.user) { if ($('#main')) rout
 // Pages such as Chat or Image open from what is already loaded, so the sign-in is also checked on each page change
 // and when the app comes back to the screen (a phone tab left for a while).
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.user) checkSignIn(); });
-async function loadModels() { S.models = (await api('/api/models')).models; }
+async function loadModels() { const j = await api('/api/models'); S.models = j.models; S.modelAliases = j.aliases || {}; }
 // Video Builder and Video Agent projects are listed in Recents too, so they can be opened again.
 // Work kept outside chats is listed in Recents too, so it can be opened again: Video Builder and Video Agent projects,
 // Studio Pro agent sessions and Ad Studio brands.

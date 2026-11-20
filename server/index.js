@@ -29,7 +29,7 @@ import { mountKeyframes } from './builder/keyframes.js';
 import { mountPro } from './pro.js';
 import { mountAdmin } from './admin.js';
 import { trackRequest, recordFailure } from './monitor.js';
-import { getCatalog, findModel, estimateChatUsd, paidUsd } from './catalog.js';
+import { getCatalog, findModel, estimateChatUsd, paidUsd, modelAliases } from './catalog.js';
 import { PLANS, PACKS, CREDIT_USD, MARKUP, markupOf, usdToCredits, charge, round2, findOffer, migrateAll, sweepCredits, needCredits, balanceOf } from './credits.js';
 import { ingest, getFiles, dataUrl, filePath, fileMeta } from './files.js';
 import { call, sse, GatewayError } from './gateway.js';
@@ -169,7 +169,7 @@ function getOrCreateConv(user, cid, firstText, kind) {
 app.get('/api/config', (_req, res) => {
   res.json({ flags: flags(), ffmpeg: ffmpegInfo().ok, uploadLimits: { imageMb: limits().imageMb, videoMb: limits().videoMb, audioMb: limits().audioMb, fileMb: limits().fileMb }, googleLogin: googleReady(), emailConfirm: mailReady(), devAuth: process.env.NODE_ENV !== 'production', supportEmail: process.env.SUPPORT_EMAIL || '', plans: PLANS, packs: PACKS, creditUsd: CREDIT_USD(), markup: MARKUP(), paymentMode: paymentMode(), keyConfigured: !!process.env.AICREDIT_API_KEY, docKinds: kindList(), docFonts: SAFE_FONTS });
 });
-app.get('/api/models', wrap(async (_req, res) => res.json({ models: await getCatalog() })));
+app.get('/api/models', wrap(async (_req, res) => { const models = await getCatalog(); res.json({ models, aliases: modelAliases() }); }));
 
 // ---------- auth ----------
 app.post('/api/auth/register', limit('register', 30, 3600), wrap(register));
