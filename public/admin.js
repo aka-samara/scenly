@@ -355,6 +355,17 @@ async function activityTab() {
 }
 
 // ---------- System ----------
+// The one-off email about the credit rules of 2026-11-20, to every account that has ever paid. Hidden once all are sent.
+function announceCard() {
+  const box = h('div', {});
+  api('/api/admin/announce/credit-rules').then((a) => {
+    if (!a.pending) return;
+    const go = h('button', { class: 'btn sm primary' }, `Send to ${a.pending} paying accounts`);
+    go.onclick = () => confirmBox({ title: 'Email the new credit rules?', text: `Sends the "Your Scenly credits: what's changing" email once to ${a.pending} accounts that have paid (${a.withCarried} with carried-over credits get their 90-day date). Accounts already emailed are skipped.`, ok: 'Send emails', onOk: async () => { const r = await api('/api/admin/announce/credit-rules', { method: 'POST' }); toast(`${r.sent} sent${r.failed.length ? `, ${r.failed.length} failed` : ''}`); box.replaceChildren(card('Credit rules email', h('p', {}, `${r.sent} sent${r.failed.length ? `. Failed: ${r.failed.map((f) => f.email).join(', ')}` : '.'}`))); } });
+    box.replaceChildren(card('Credit rules email', h('div', { class: 'adm-stack sm' }, h('p', { class: 'dim' }, `${a.pending} of ${a.total} paying accounts have not had the email about the new credit rules yet.`), h('div', { class: 'adm-actions' }, go))));
+  }).catch(() => {});
+  return box;
+}
 async function systemTab() {
   const [s, hl, pr] = await Promise.all([api('/api/admin/settings'), api('/api/admin/health').catch(() => null), api('/api/admin/pricing').catch(() => null)]);
   const pct = (n) => (n == null ? '–' : (Math.round(n * 10) / 10) + '%');
@@ -363,6 +374,7 @@ async function systemTab() {
   const FLAG_LABELS = { videoAgent: 'Video Agent', videoBuilder: 'Video Builder', precisionEdit: 'Precision edit', musicLibrary: 'Music library', beatSync: 'Beat sync', audioFirst: 'Audio-first planning', videoExtend: 'Extend video', frameTiles: 'Frame tiles', studioPro: 'Studio Pro', subscriptions: 'Subscriptions' };
   return h('div', { class: 'adm-stack' },
     h('div', { class: 'adm-row-h' }, h('h2', {}, 'System'), h('span', { class: 'dim' }, 'switches are set in .env and need a restart')),
+    announceCard(),
     h('div', { class: 'adm-grid3' },
       card('Billing', h('dl', { class: 'adm-dl' },
         h('dt', {}, 'Subscriptions'), h('dd', {}, yes(s.subscriptions)),

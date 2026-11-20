@@ -152,6 +152,20 @@ export function build(kind, user, d = {}) {
       cta: { label: 'Add credits', url: link('#/billing') },
       reason: ACCOUNT_REASON,
     }),
+    credit_rules: () => ({
+      subject: "Your Scenly credits: what's changing",
+      preheader: d.carried > 0 ? `Your ${fmtNum(Math.floor(d.carried))} credits are valid until ${fmtDate(d.expiresAt)}.` : 'New rules for plan and top-up credits.',
+      title: "Your credits: what's changing",
+      paras: [`${hi} from today, Scenly credits work a little differently. Here is what that means for you.`,
+        d.carried > 0 ? `<b>Your current credits are safe.</b> Your ${fmtNum(Math.floor(d.carried))} credits are still in your account. They are valid until <b>${esc(fmtDate(d.expiresAt))}</b>, 90 days from today, so you have plenty of time to use them.` : null,
+        '<b>Monthly plan credits</b> are valid for one month from your billing date. Any left when your plan renews expire and do not roll over.',
+        '<b>Top-up packs</b> are valid for 90 days from purchase, with no subscription needed. You can buy as many as you like, whenever you like.',
+        '<b>Pro tools</b> (Ad Studio, Video Builder, Video Agent and Studio Pro) are open whenever you have an active plan or paid credits left. They pause at zero until you top up or your plan renews.',
+        '<b>Which credits are used first:</b> your monthly plan credits always go first, so your top-ups are saved for later. Top-ups are then used soonest to expire first.'].filter(Boolean),
+      cta: { label: 'See my credits', url: link('#/billing') },
+      after: ["You can see your credits and when each one expires on your Plans &amp; credits page. We'll also email you a week before any top-up credits expire.", 'Questions? Just write to info@adxl.ai.'],
+      reason: ACCOUNT_REASON,
+    }),
     credits_expiring: () => {
       const n = (d.packs || []).reduce((t, p) => t + p.credits, 0), first = (d.packs || [])[0];
       return {
