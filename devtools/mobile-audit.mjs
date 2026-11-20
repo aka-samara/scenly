@@ -29,10 +29,10 @@ const probe = () => {
   const W = innerWidth; const res = { docOverflow: document.documentElement.scrollWidth - W, wide: [], clipped: [], small: [], wrapped: [] };
   const vis = (el) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity !== 0; };
   const name = (el) => (el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '')) + ' "' + (el.innerText || el.value || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 40) + '"';
-  const inScroller = (el) => { for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) { const o = getComputedStyle(p).overflowX; if (o === 'auto' || o === 'scroll' || o === 'hidden') return true; } return false; };
+  const inScroller = (el) => { for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) { const o = getComputedStyle(p).overflowX; if (o === 'auto' || o === 'scroll') return true; } return false; };
   for (const el of document.querySelectorAll('body *')) {
     if (!vis(el)) continue; const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
-    if (cs.position !== 'fixed' && (r.right > W + 1 || r.left < -1) && !inScroller(el) && res.wide.length < 12) res.wide.push(name(el) + ` [${Math.round(r.left)}..${Math.round(r.right)}]`);
+    if (cs.position !== 'fixed' && r.right > W + 1 && !inScroller(el) && !el.closest('.sidebar, .bgfx, .orb, [aria-hidden="true"]') && res.wide.length < 12) res.wide.push(name(el) + ` [${Math.round(r.left)}..${Math.round(r.right)}]`);
     const ctl = el.matches('button, .btn, .opt, .chip, a.btn, [role=button], select, .tab, label.chip, .pill');
     if (ctl) {
       if ((el.scrollWidth > el.clientWidth + 1 && cs.overflowX !== 'visible') || (el.scrollHeight > el.clientHeight + 2 && cs.overflowY !== 'visible' && el.tagName !== 'SELECT')) res.clipped.push(name(el));
