@@ -9,6 +9,7 @@ import { subsOn, stripeReady, stripe, syncUser, setCancel, switchPlan, planById,
 import { KINDS as DOC_KINDS } from './docs/kinds/index.js';
 import { flags } from './flags.js';
 import { mailReady } from './mail.js';
+import { sendEmail } from './emails.js';
 import { CREDIT_USD, MARGIN_PCT, MASTER_DISCOUNT_PCT, markupFor, markupOf } from './credits.js';
 import { getCatalog, TYPICAL_MSG } from './catalog.js';
 
@@ -409,6 +410,27 @@ export function mountAdmin(app, { requireUser, requireAdmin, wrap }) {
   app.get('/api/admin/errors', ...A, (req, res) => res.json(errors({ days: Math.min(90, Math.max(1, Number(req.query.days) || 7)), kind: String(req.query.kind || ''), model: String(req.query.model || ''), q: String(req.query.q || '').slice(0, 100) })));
   app.post('/api/admin/errors/clear', ...A, (req, res) => { const n = db.monitor.failures.length; db.monitor.failures = []; save(); audit(req, null, 'clear_error_log', { removed: n }); res.json({ ok: true, removed: n }); });
 
+  // One-off announcement of the credit rules of 2026-11-20 to every account that has ever paid (approved by the
+  // owner). GET lists who would get it; POST sends it. Each account is emailed once (user.creditRulesMailedAt).
+  const ruleRecipients = () => db.users.filter((u) => !u.banned && u.email && !/\.test$/i.test(u.email) && isPaid(u)).map((u) => {
+    const carry = (walletView(u)?.packs || []).filter((p) => p.kind === 'carry');
+    return { u, carried: carry.reduce((t, p) => t + p.credits, 0), expiresAt: carry[0]?.expiresAt || null };
+  });
+  app.get('/api/admin/announce/credit-rules', ...A, (_req, res) => {
+    const all = ruleRecipients();
+    res.json({ total: all.length, pending: all.filter((r) => !r.u.creditRulesMailedAt).length, sent: all.filter((r) => r.u.creditRulesMailedAt).length, withCarried: all.filter((r) => r.carried > 0).length });
+  });
+  app.post('/api/admin/announce/credit-rules', ...A, wrap(async (req, res) => {
+    const todo = ruleRecipients().filter((r) => !r.u.creditRulesMailedAt);
+    let sent = 0; const failed = [];
+    for (const r of todo) {
+      try { await sendEmail('credit_rules', r.u, { carried: r.carried, expiresAt: r.expiresAt }); r.u.creditRulesMailedAt = now(); sent++; }
+      catch (e) { failed.push({ email: r.u.email, error: String(e.message || e).slice(0, 200) }); }
+    }
+    save();
+    audit(req, null, 'announce_credit_rules', { sent, failed: failed.length });
+    res.json({ sent, failed });
+  }));
   app.get('/api/admin/audit', ...A, (_req, res) => res.json({ audit: db.adminAudit.slice(-300).reverse() }));
 
   // What every model costs and what users pay for it, one typical unit each: a chat message (TYPICAL_MSG:
