@@ -30,11 +30,12 @@ test('demo plan: start, renew once per month, cancel at the end', async () => {
   assert.equal(u.plan, 'pro'); assert.equal(u.credits, 20000); assert.equal(billingView(u).trial, false);
   await assert.rejects(subscribe(u, planById('max5')), (e) => e.status === 409);
   u.sub.currentPeriodEnd = new Date(Date.now() - 1000).toISOString();
-  await syncUser(u); assert.equal(u.credits, 40000);
-  await syncUser(u); assert.equal(u.credits, 40000, 'no second renewal in the same month');
+  await syncUser(u); assert.equal(u.credits, 20000, 'unused plan credits expire at renewal: no rollover');
+  assert.ok(db.ledger.some((l) => l.userId === u.id && l.type === 'expire' && l.credits === -20000));
+  await syncUser(u); assert.equal(u.credits, 20000, 'no second renewal in the same month');
   await setCancel(u, true);
   u.sub.currentPeriodEnd = new Date(Date.now() - 1000).toISOString();
-  await syncUser(u); assert.equal(u.plan, 'free'); assert.equal(u.credits, 40000, 'credits kept after the plan ends');
+  await syncUser(u); assert.equal(u.plan, 'free'); assert.equal(u.credits, 20000, 'plan credits last until their own end date');
 });
 test('demo switch: up adds the difference, down adds nothing', async () => {
   const u = user(); await subscribe(u, planById('pro'));

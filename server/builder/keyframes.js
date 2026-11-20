@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import db, { save, id, now } from '../db.js';
 import { flags } from '../flags.js';
-import { canAfford, round2 } from '../credits.js';
+import { canAfford, round2, needCredits } from '../credits.js';
 import { keys, put, locate } from '../storage.js';
 import { ffmpeg, ffmpegInfo } from '../ffmpeg.js';
 import { defineJob, enqueue } from '../jobs.js';
@@ -60,7 +60,7 @@ export function mountKeyframes(app, { requireUser, wrap }) {
     const blank = targets.find((s) => !String(s.prompt || '').trim()); if (blank) throw new UserError(`Scene ${p.scenes.indexOf(blank) + 1} has no description yet. Write what should happen in it.`);
     const per = round2(model.price.creditsPerImage); const total = round2(per * targets.length);
     if (req.body.dryRun) return res.json({ count: targets.length, per, total, model: model.name, estimated: !!model.price.estimated });
-    if (!canAfford(req.user, total)) throw new UserError(`Not enough credits. ${targets.length > 1 ? `These ${targets.length} pictures need` : 'This picture needs'} about ${Math.ceil(total)} credits and you have ${Math.floor(req.user.credits)}.`, 402, 'insufficient_credits');
+    needCredits(req.user, total);
     const idem = typeof req.body.idem === 'string' && req.body.idem.length >= 8 ? req.body.idem.slice(0, 80) : id('i_'); let started = 0;
     for (const s of targets) {
       const key = `${idem}:${s.id}`; if (db.jobs.some((j) => j.userId === req.user.id && j.type === 'keyframe' && j.idempotencyKey === key)) continue;

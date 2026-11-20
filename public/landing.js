@@ -319,20 +319,20 @@ function modelDirectory(openGate) {
 function plans(examplesList) {
   const P = S.config.plans, packs = S.config.packs || [];
   return h('section', { class: 'lp-sec', id: 'lp-plans' },
-    head('Pricing', 'Start free, upgrade when you need more', `No card needed to start. ${num(P[0].credits)} welcome credits are on us.`),
+    head('Pricing', 'Start free, upgrade when you need more', `No card needed to start. ${num(P[0].credits)} free starter credits are on us.`),
     h('div', { class: 'lp-plans' }, P.map((pl) => h('div', { class: 'lp-plan' + (pl.popular ? ' pop' : '') },
       pl.popular && h('span', { class: 'tag new' }, 'Most popular'),
       h('b', {}, pl.name),
       h('div', { class: 'price' }, pl.priceUsd ? '$' + pl.priceUsd : 'Free', pl.priceUsd ? h('small', {}, ' / month') : null),
-      h('div', { class: 'lp-credits' }, icon('coin'), `${num(pl.credits)} credits${pl.priceUsd ? ' every month' : ' to start'}`),
+      h('div', { class: 'lp-credits' }, icon('coin'), `${num(pl.credits)} credits${pl.priceUsd ? ' every month, valid 1 month' : ' to start'}`),
       h('small', {}, pl.tagline),
       h('ul', {}, pl.perks.slice(1).map((x) => h('li', {}, icon('check'), x))),
       examplesList(pl.credits),
       h('a', { class: 'btn ' + (pl.popular || !pl.priceUsd ? 'primary' : ''), href: '#/signup' }, pl.priceUsd ? `Start free, then choose ${pl.name}` : 'Start free'),
     ))),
     h('div', { class: 'lp-plan-notes' },
-      h('div', { class: 'lp-note' }, h('span', { class: 'ic' }, icon('lock')), h('div', {}, h('b', {}, 'Tools in the paid plans'), h('small', {}, 'Video Agent, Video Builder, Studio Pro and Ad Studio are part of Pro, Max and Ultra. Chat, images, Video Studio, documents, Code and the AI apps work on every plan, including Free.'))),
-      packs.length > 0 && h('div', { class: 'lp-note' }, h('span', { class: 'ic' }, icon('coin')), h('div', {}, h('b', {}, 'Credit packs'), h('small', {}, 'Top up any time with a one-time pack, no subscription: ', packs.map((p) => `${num(p.credits)} credits for $${p.priceUsd}`).join(', '), '. Packs add credits only; the paid tools need a monthly plan.'))),
+      h('div', { class: 'lp-note' }, h('span', { class: 'ic' }, icon('lock')), h('div', {}, h('b', {}, 'Pro tools'), h('small', {}, 'Ad Studio, Video Builder, Video Agent and Studio Pro open with any monthly plan or top-up pack, for as long as you have paid credits or an active plan. Free starter credits work in Chat, Image, Video Studio, Docs, Code and AI Apps.'))),
+      packs.length > 0 && h('div', { class: 'lp-note' }, h('span', { class: 'ic' }, icon('coin')), h('div', {}, h('b', {}, 'Top-up packs, valid 90 days'), h('small', {}, 'No subscription needed: ', packs.map((p) => `${num(p.credits)} credits for $${p.priceUsd}`).join(', '), '. Buy as many as you like, any time. Plan credits last one month and do not roll over; with a plan, plan credits are used first.'))),
     ),
   );
 }
@@ -343,12 +343,13 @@ function faq() {
   const mail = mailTo();
   const items = [
     ['What is Scenly?', 'Scenly is one place to chat with leading AI models and to make images, videos, ads and documents. You describe what you want, choose a model or let a studio plan the work, and download the result.'],
-    ['What do I get for free?', `A free account starts with ${num(free.credits)} welcome credits and needs no card. You can use chat, documents, Code, image generation and editing, Video Studio and the one-click AI apps.`],
+    ['What do I get for free?', `A free account starts with ${num(free.credits)} free starter credits and needs no card. Use them in Chat, Docs, Code, Image (generation and editing), Video Studio and the one-click AI Apps.`],
     ['How do credits work?', `Everything uses one credit balance. 1,000 credits are worth US$1 of model use, charged at the model's official price or less, and the cost is shown before you run anything. Cheaper models stretch your credits further.`],
-    ['Which tools need a paid plan?', `Video Agent, Video Builder, Studio Pro and Ad Studio are included in ${P.filter((p) => p.priceUsd).map((p) => p.name).join(', ').replace(/, ([^,]*)$/, ' and $1')}. A credit pack on its own does not unlock them.`],
-    ['Do unused credits roll over?', 'Yes. On the paid plans, credits you do not use in a month roll over.'],
-    ['Can I cancel my plan?', 'Yes, at any time from the billing page. Your plan stays active until the end of the period you paid for, you keep your credits after that, and you are not charged again.'],
-    ['Can I buy credits without a subscription?', 'Yes. Credit packs are one-time top-ups you can buy whenever you need more.'],
+    ['Which tools need a plan or a top-up?', `Ad Studio, Video Builder, Video Agent and Studio Pro are the Pro tools. They are included in ${P.filter((p) => p.priceUsd).map((p) => p.name).join(', ').replace(/, ([^,]*)$/, ' and $1')}, and any top-up pack opens them too. They stay open while you have paid credits or an active plan, and pause when your paid credits reach zero until you top up or your plan renews.`],
+    ['Do credits expire?', 'Monthly plan credits are valid for one month from your billing date. Unused plan credits expire when your plan renews and do not roll over. Top-up pack credits are valid for 90 days from purchase. Free starter credits have no end date.'],
+    ['Which credits are used first?', 'If you have both, Scenly always uses your monthly plan credits first so your top-ups are saved for later. Top-ups are then used soonest-to-expire first.'],
+    ['Can I cancel my plan?', 'Yes, at any time from the billing page. Your plan and its credits stay until the end of the period you paid for, and you are not charged again. Top-up credits keep their own 90-day dates.'],
+    ['Can I buy credits without a subscription?', 'Yes. Top-up packs are one-time purchases valid for 90 days. You can buy several, at any time, even before the last one runs out. They also open the Pro tools.'],
     ['Which AI models can I use?', `${S.models.length ? `Right now there are ${S.models.length} models: ${c('chat')} for chat, ${c('image')} for images and ${c('video')} for video. ` : ''}You choose the model each time, and new models are added as they are released.`],
     ['What is Face lock?', 'Face lock keeps one saved character the same in everything you make. Save a person, a product or a logo once, turn the lock on, and every picture and every video shot uses it.'],
     ['Who owns what I make?', ['We do not claim ownership of what is made for you. Some models have their own rules, and the details are in the ', h('a', { href: '#/terms' }, 'Terms of Use'), '.']],

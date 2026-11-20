@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import db, { save, id, now, MEDIA_DIR } from './db.js';
+import db, { save, id, now, MEDIA_DIR, DATA_DIR } from './db.js';
 import { runImage, startVideo, pollTask, enhancePrompt, mediaRef, signFile, sizeLike, UserError } from './generate.js';
 import { APPS, findApp, publicApp, fillPrompt } from './apps.js';
 import { register, login, logout, resend, verify, verifyCode, forgot, reset, changePassword, googleStart, googleCallback, googleReady, isPaid, parseCookies, paidPlanOnly, PAID_TOOL_PATHS, requireUser, requireAdmin, publicUser } from './auth.js';
@@ -30,7 +30,7 @@ import { mountPro } from './pro.js';
 import { mountAdmin } from './admin.js';
 import { trackRequest, recordFailure } from './monitor.js';
 import { getCatalog, findModel, estimateChatUsd, paidUsd } from './catalog.js';
-import { PLANS, PACKS, CREDIT_USD, MARKUP, markupOf, usdToCredits, charge, round2, findOffer } from './credits.js';
+import { PLANS, PACKS, CREDIT_USD, MARKUP, markupOf, usdToCredits, charge, round2, findOffer, migrateAll, sweepCredits, needCredits, balanceOf } from './credits.js';
 import { ingest, getFiles, dataUrl, filePath, fileMeta } from './files.js';
 import { call, sse, GatewayError } from './gateway.js';
 import { startCheckout, finishCheckout, paymentMode } from './payments.js';
@@ -461,9 +461,10 @@ const chatHandler = wrap(async (req, res) => {
   const inTok = estTokens(JSON.stringify(messages.map((m) => (typeof m.content === 'string' ? m.content : m.content.filter((p) => p.type === 'text').map((p) => p.text).join(' '))))) + messages.reduce((n, m) => n + (Array.isArray(m.content) ? (m.content.length - 1) * 1100 : 0), 0);
 
   // Never let one reply cost more than the user has: cap output tokens by balance.
-  const budgetUsd = (user.credits * CREDIT_USD()) / markupOf(model) - (inTok * model.price.inPerM) / 1e6;
+  const bal = balanceOf(user);
+  const budgetUsd = (bal * CREDIT_USD()) / markupOf(model) - (inTok * model.price.inPerM) / 1e6;
   const affordableOut = model.price.outPerM > 0 ? Math.floor((budgetUsd / model.price.outPerM) * 1e6) : 1e9;
-  if (user.credits <= 0 || affordableOut < (docReq ? 1500 : 200)) {
+  if (bal <= 0 || affordableOut < (docReq ? 1500 : 200)) {
     if (!regenerate) conv.messages.pop();
     return res.status(402).json({ error: 'Not enough credits for this model. Top up or choose a cheaper model.', code: 'insufficient_credits' });
   }
@@ -606,6 +607,16 @@ app.get('/api/video/:taskId', requireUser, wrap(async (req, res) => {
 }));
 setInterval(() => db.tasks.filter((t) => t.status === 'pending').forEach(pollTask), 15000).unref();
 
+// Credit rules of 2026-11-20: every balance moves into buckets (plan, top-up, free) once, at the first start of
+// this version. Totals never change; the database as it was is kept beside it. Then plan and top-up credits
+// past their date expire every 10 minutes, and top-ups that expire within a week get one reminder email.
+try {
+  const r = migrateAll({ keepCopy: () => { const f = path.join(DATA_DIR, 'db.json'); if (fs.existsSync(f)) fs.copyFileSync(f, `${f}.before-credit-rules-${new Date().toISOString().replace(/[:.]/g, '-')}`); } });
+  if (r.moved) console.log(`[credits] ${r.moved} accounts moved to the new credit rules (${r.carry || 0} paid carried over, ${r.free || 0} free, ${r.owed || 0} owing); total ${r.total} credits unchanged`);
+} catch (e) { console.error('[credits] moving balances to the new credit rules failed; nothing was changed:', e.message); }
+setTimeout(() => { try { sweepCredits(); } catch (e) { console.error('[credits] sweep failed:', e.message); } }, 30e3).unref();
+setInterval(() => { try { sweepCredits(); } catch (e) { console.error('[credits] sweep failed:', e.message); } }, 10 * 60e3).unref();
+
 // ---------- studio: Image / Video pages and AI Apps ----------
 const genView = (g) => ({ ...g, userId: undefined });
 // The other studios that make pictures and videos through these routes, so Assets and Recents can say where each came from.
@@ -617,7 +628,7 @@ async function createGeneration(user, { mode, modelId, prompt, fileIds = [], vid
   // A Design Library style. Photo Transform styles work on the uploaded picture and need no typed prompt.
   const style = styleId && mode === 'image' ? findStyle(styleId) : null;
   if (styleId && mode === 'image' && !style) throw new UserError('That style no longer exists. Pick another one.');
-  if (style && styleLocked(user, style)) throw new UserError(`${style.name} is part of the full Design Library, which comes with any paid plan or credit pack.`, 402, 'style_locked');
+  if (style && styleLocked(user, style)) throw new UserError(`${style.name} is part of the full Design Library, which comes with any paid plan or top-up pack.`, 402, 'style_locked');
   if (style?.needsImage && !getFiles(user, fileIds).some((f) => f.kind === 'image') && !characterId) throw new UserError(`${style.name} changes a photo. Add a photo first.`);
   if (!finalPrompt && !style?.needsImage) throw new UserError(mode === 'video' ? 'Describe the video you want.' : 'Describe the image you want.');
   const ch = characterId ? userCharacter(user, characterId) : null;

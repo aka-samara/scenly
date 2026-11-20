@@ -9,7 +9,7 @@ import net from 'node:net';
 import db, { save, id } from '../db.js';
 import { flags } from '../flags.js';
 import { getCatalog, findModel, paidUsd } from '../catalog.js';
-import { reserve, charge, usdToCredits, centsToCredits, round2, canAfford } from '../credits.js';
+import { reserve, charge, usdToCredits, centsToCredits, round2, canAfford, needCredits } from '../credits.js';
 import { locate, hasBytes, keys, abs, put, sizeOf } from '../storage.js';
 import { needFfmpeg, ffmpeg, ffmpegInfo, probe } from '../ffmpeg.js';
 import { defineJob, enqueue, publicJob } from '../jobs.js';
@@ -174,7 +174,7 @@ export function mountAssist(app, { requireUser, wrap }) {
     if (running) return res.json({ job: publicJob(running), cap: running.payload.cap, already: true });
     const cap = planCap(rec.duration);
     if (req.body.dryRun) return res.json({ cap, seconds: rec.duration });
-    if (!canAfford(req.user, cap)) throw new UserError(`Not enough credits. Planning may need up to ${cap} credits and you have ${Math.floor(req.user.credits)}.`, 402, 'insufficient_credits');
+    needCredits(req.user, cap);
     const hold = reserve(req.user, cap, 'Video Builder · scenes planned from the voice-over', { builderId: p.id });
     const { job } = enqueue({ type: 'plan', userId: req.user.id, ref: p.id, holdId: hold.id, idempotencyKey: typeof req.body.idem === 'string' ? req.body.idem.slice(0, 80) : undefined, payload: { projectId: p.id, cap, lang: text(req.body.lang, 12), style: text(req.body.style, 200) } });
     res.json({ job: publicJob(job), cap });
@@ -206,7 +206,7 @@ export function mountAssist(app, { requireUser, wrap }) {
     if (!model) throw new UserError('No video model is available right now. Please try again later.', 503);
     const lim = clipLimits(model);
     let chat = await writer(); if (!chat) throw new UserError('No writing model is available right now. Please try again later.', 503);
-    if (!((req.user.credits || 0) > 0)) throw new UserError('You are out of credits. Top up to write a storyboard.', 402, 'insufficient_credits');
+    needCredits(req.user, 0, 'You are out of credits. Top up to write a storyboard.');
     const language = LANGUAGES.includes(req.body.language) ? req.body.language : 'English'; const style = STYLES.find((s) => s.id === req.body.style);
     const ctl = new AbortController(); res.on('close', () => { if (!res.writableEnded) ctl.abort(); });
     // What came with the prompt is studied first: pictures and video frames go to the writing model together with the idea.

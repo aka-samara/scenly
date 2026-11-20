@@ -1,13 +1,14 @@
 // Subscriptions with Stripe (switch: FEATURE_SUBSCRIPTIONS=1, off by default).
 //
 // How it works
-// - Everyone starts on the free trial: the welcome credits, no card needed.
+// - Everyone starts on the free trial: 1,000 free starter credits for the standard tools, no card needed.
 // - Paid plans are monthly Stripe subscriptions. Each paid invoice adds that plan's credits once
-//   (first payment and every renewal). Unused credits roll over.
+//   (first payment and every renewal). Plan credits last one billing month: unused ones expire at renewal
+//   (no rollover; see server/wallet.js).
 // - Upgrading charges the price difference for the rest of the month at once and adds the matching
 //   share of the extra credits. Moving to a smaller plan starts at the next renewal's price; nothing is refunded.
 // - Cancelling keeps the plan until the end of the paid month. Card changes and invoices are in Stripe's billing page.
-// - Credit packs stay one-time purchases (server/payments.js).
+// - Credit packs stay one-time purchases (server/payments.js), valid 90 days, any number, with or without a plan.
 // - Stripe is the record of truth. The app reads it back (syncUser) after checkout, from the webhook when one is set up,
 //   when the billing page opens, and every 30 minutes for plans that are due. Every grant is keyed by the Stripe
 //   invoice id, so reading the same invoice twice never adds credits twice.
@@ -194,7 +195,7 @@ function grantInvoice(user, inv) {
   } else desc = `Plan payment · $${round2(inv.amount_paid / 100)}`;
   const pay = { id: id('pay_'), userId: user.id, offerId: plan?.id || null, kind: 'subscription', reason, amountUsd: round2((inv.amount_paid || 0) / 100), credits, status: 'paid', mode: 'stripe', stripeInvoice: inv.id, stripeSubscription: subId, ...invoiceLinks(inv), createdAt: now(), paidAt: tsIso(inv.status_transitions?.paid_at) || now() };
   db.payments.push(pay);
-  if (credits > 0) grant(user, credits, 'purchase', desc, { paymentId: pay.id });
+  if (credits > 0) grant(user, credits, 'purchase', desc, { paymentId: pay.id, periodEnd: tsIso(main?.period?.end) || undefined });
   save();
   return credits;
 }
@@ -459,7 +460,7 @@ const DESC = (p) => {
   const plan = planById(p.offerId);
   if (p.kind === 'subscription') return p.reason === 'subscription_cycle' ? `${plan?.name || 'Plan'} plan, monthly renewal` : p.reason === 'subscription_update' ? `Upgrade to ${plan?.name || 'a bigger plan'}, rest of the month` : `${plan?.name || 'Plan'} plan, first month`;
   if (plan) return `${plan.name} plan`;
-  return p.credits ? `Credit pack, ${Number(p.credits).toLocaleString('en-US')} credits` : 'Payment';
+  return p.credits ? `Top-up pack, ${Number(p.credits).toLocaleString('en-US')} credits (valid 90 days)` : 'Payment';
 };
 export function paymentHistory(user) {
   return db.payments

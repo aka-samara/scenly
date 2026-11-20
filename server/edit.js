@@ -252,7 +252,7 @@ export function mountEdit(app, { requireUser, wrap, createGeneration, studioSess
       // A Design Library look applied to a finished picture.
       const style = findStyle(req.body.input?.styleId);
       if (!style) throw new UserError('Pick a style.');
-      if (styleLocked(user, style)) throw new UserError(`${style.name} is part of the full Design Library, which comes with any paid plan or credit pack.`, 402, 'style_locked');
+      if (styleLocked(user, style)) throw new UserError(`${style.name} is part of the full Design Library, which comes with any paid plan or top-up pack.`, 402, 'style_locked');
       spec = { prompt: style.needsImage ? applyStyle(style, '', req.body.input?.styleVar) : `Redraw this image in a new style, keeping the same subject and composition. Style: ${applyStyle(style, '', req.body.input?.styleVar).replace(/^\. Style: /, '')}`, label: `Style: ${style.name}` };
     } else spec = toolPrompt(tool, req.body.input || {});
     const meta = { rootId: rootOf(src), editOf: src.id, tool, label: spec.label };

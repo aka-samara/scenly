@@ -1,4 +1,4 @@
-// Video Agent, Video Builder and Studio Pro are for Pro and above; chat, images and Video Studio stay open.
+// Video Agent, Video Builder and Studio Pro open with a plan or paid credits; chat, images and Video Studio stay open.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,9 +18,11 @@ test('the Free plan is stopped with an upgrade message', () => {
   assert.equal(r.passed, false); assert.equal(r.res.code, 402); assert.equal(r.res.body.code, 'paid_plan_required');
 });
 test('Pro, Max and Ultra get in', () => { for (const plan of ['pro', 'max5', 'max20']) assert.equal(ask(mk(plan)).passed, true, plan); });
-test('a credit pack alone does not open the paid tools', () => {
+test('paid credits (a top-up pack) open the Pro tools, free credits do not', () => {
   const u = mk('free', 'packbuyer@example.com'); db.payments.push({ id: 'pay_x', userId: u.id, status: 'paid', amountUsd: 10 });
-  assert.equal(ask(u).passed, false); assert.equal(publicUser(u).paid, true); assert.equal(publicUser(u).paidPlan, false);
+  assert.equal(ask(u).passed, true); assert.equal(publicUser(u).paid, true); assert.equal(publicUser(u).paidPlan, true);
+  const f = mk('free', 'freebie@example.com');
+  assert.equal(ask(f).passed, false); assert.equal(publicUser(f).paidPlan, false); assert.equal(publicUser(f).credits, 500);
 });
 test('admins get in on any plan, and signed-out requests fall through to the sign-in check', () => {
   assert.equal(ask(mk('free', 'boss@example.com')).passed, true);

@@ -3,7 +3,7 @@
 // The older /api/admin/stats and /api/admin/health routes stay where they were (index.js, prod.js).
 import crypto from 'node:crypto';
 import db, { save, id, now } from './db.js';
-import { PLANS, grant, round2 } from './credits.js';
+import { PLANS, grant, round2, walletView } from './credits.js';
 import { isAdminEmail, isPaid } from './auth.js';
 import { subsOn, stripeReady, stripe, syncUser, setCancel, switchPlan, planById, ensurePrice, demoStart, notePlan, BillingError } from './billing.js';
 import { KINDS as DOC_KINDS } from './docs/kinds/index.js';
@@ -155,6 +155,7 @@ function userDetail(u) {
     ban: u.banned ? { at: u.bannedAt, reason: u.banReason || '', by: u.bannedBy || '' } : null,
     audit: db.adminAudit.filter((a) => a.userId === u.id).slice(-50).reverse(),
     paidEver: isPaid(u),
+    wallet: walletView(u),
     note: u.adminNote || '',
   };
 }
@@ -338,8 +339,10 @@ export function mountAdmin(app, { requireUser, requireAdmin, wrap }) {
     const note = String(req.body.note || '').replace(/\s+/g, ' ').trim().slice(0, 120);
     if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 1e6) return res.status(400).json({ error: 'Enter a number of credits (up to 1,000,000; use a minus sign to take credits away).' });
     if (amount < 0 && (u.credits || 0) + amount < 0) return res.status(400).json({ error: `This would take the balance below zero (it is ${round2(u.credits || 0)}).` });
-    grant(u, amount, amount > 0 ? 'promo' : 'adjust', amount > 0 ? `Promo credits${note ? ': ' + note : ''}` : `Credits removed by Scenly${note ? ': ' + note : ''}`, { by: req.user.id });
-    audit(req, u, amount > 0 ? 'promo_credits' : 'remove_credits', { amount, note });
+    // paid: added as top-up credits (90 days, every tool including the Pro tools); otherwise free credits (standard tools, no expiry).
+    const paid = amount > 0 && !!req.body.paid;
+    grant(u, amount, amount > 0 ? 'promo' : 'adjust', amount > 0 ? `${paid ? 'Promo top-up credits (90 days)' : 'Promo credits'}${note ? ': ' + note : ''}` : `Credits removed by Scenly${note ? ': ' + note : ''}`, { by: req.user.id, paid });
+    audit(req, u, amount > 0 ? (paid ? 'promo_paid_credits' : 'promo_credits') : 'remove_credits', { amount, note });
     res.json({ ok: true, credits: round2(u.credits) });
   });
 

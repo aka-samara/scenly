@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
 import db, { save, id, now } from './db.js';
-import { grant } from './credits.js';
+import { grant, PRO_PATHS, hasProAccess, proPaused, balanceOf, walletView } from './credits.js';
 import { subsOn, billingView } from './billing.js';
 import { mailReady, baseUrl } from './mail.js';
-import { sendEmail, notify } from './emails.js';
+import { sendEmail, notify, lowAtFor } from './emails.js';
 
 const SESSION_DAYS = 30;
 const COOKIE = 'pm_session';
@@ -19,23 +19,27 @@ export const BANNED_MSG = 'This account has been suspended. Please contact suppo
 export const isAdminEmail = (email) => adminEmails().includes(String(email || '').toLowerCase());
 export const isPaid = (u) => (u.plan && u.plan !== 'free') || db.payments.some((p) => p.userId === u.id && p.status === 'paid' && p.amountUsd > 0);
 
-// Video Agent, Video Builder and Studio Pro (with Ad Studio, which runs on Studio Pro) are for people on a
-// monthly plan: Pro and above. A credit pack alone does not open them. Admins always get in.
-export const PAID_TOOL_PATHS = ['/api/builder', '/api/agent', '/api/pro'];
-export const hasPaidPlan = (u) => !!u && ((!!u.plan && u.plan !== 'free') || isAdminEmail(u.email));
+// Video Agent, Video Builder and Studio Pro (with Ad Studio, which runs on Studio Pro) are the Pro tools. They are
+// open while the person has an active monthly plan or paid credits left (plan or top-up credits); the free
+// starter credits do not open them. With no paid credits left they pause until a top-up or the next renewal.
+// Admins always get in.
+export const PAID_TOOL_PATHS = PRO_PATHS;
+export const hasPaidPlan = (u) => !!u && (hasProAccess(u) || isAdminEmail(u.email));
 // Mounted on PAID_TOOL_PATHS before the routes. Someone who is not signed in falls through to the route's own
-// "Please sign in" answer; a signed-in person on the Free plan is told to upgrade and nothing runs.
+// "Please sign in" answer; a signed-in person without a plan or paid credits is offered both and nothing runs.
 export function paidPlanOnly(req, res, next) {
   const sess = db.sessions[req.cookies?.[COOKIE]];
   const user = sess && sess.expires >= Date.now() ? db.users.find((x) => x.id === sess.userId) : null;
   if (!user || hasPaidPlan(user)) return next();
-  res.status(402).json({ error: 'This tool is part of the Pro, Max and Ultra plans. Upgrade to use it.', code: 'paid_plan_required' });
+  res.status(402).json({ error: 'Pro tools need a monthly plan or a top-up pack. Your free credits work in Chat, Image, Video Studio, Docs, Code and AI Apps.', code: 'paid_plan_required' });
 }
 
 export function publicUser(u) {
   return {
     id: u.id, email: u.email, name: u.name, plan: u.plan || 'free',
-    credits: Math.round(u.credits * 100) / 100,
+    credits: Math.round(balanceOf(u, { pro: false }) * 100) / 100,
+    wallet: walletView(u), proPaused: proPaused(u) && hasPaidPlan(u) && !isAdminEmail(u.email),
+    lowCreditAt: lowAtFor(u),
     isAdmin: adminEmails().includes(u.email),
     createdAt: u.createdAt,
     hasPassword: !!u.passHash, google: !!u.googleId, paid: isPaid(u), paidPlan: hasPaidPlan(u),
@@ -70,7 +74,7 @@ function welcome(user) {
   if (user.welcomed || db.ledger.some((l) => l.userId === user.id && l.type === 'bonus')) return;
   user.welcomed = true;
   const bonus = Number(process.env.SIGNUP_BONUS_CREDITS ?? 1000);
-  if (bonus > 0) grant(user, bonus, 'bonus', 'Welcome credits');
+  if (bonus > 0) grant(user, bonus, 'bonus', 'Free starter credits (Chat, Image, Video Studio, Docs, Code, AI Apps)');
   notify('welcome', user, { credits: bonus });
 }
 function newUser({ email, name, password, googleId, verified }) {

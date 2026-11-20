@@ -1391,6 +1391,26 @@ body:has(.lightbox) .popover { z-index: 130; }
 .paid-only-plans { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin: 14px 0 8px; }
 .paid-only-plans .up-plan { text-decoration: none; }
 
+/* ---------- credit rules (2026-11-20): low-balance strip, credits breakdown on the billing page ---------- */
+.credit-strip { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 40; width: max-content; max-width: min(760px, calc(100% - 32px)); display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border-radius: 12px; font-size: 13.5px; background: var(--panel); border: 1px solid var(--line); color: var(--text); box-shadow: var(--shadow); }
+.credit-strip > svg { width: 16px; height: 16px; flex: none; color: var(--accent); }
+.credit-strip.warn { background: linear-gradient(rgba(255,181,71,.12), rgba(255,181,71,.12)), var(--panel); border-color: rgba(255,181,71,.4); }
+.credit-strip.warn > svg { color: var(--warn); }
+.credit-strip .grow { flex: 1; min-width: 0; }
+.credit-strip .btn.sm { white-space: nowrap; }
+@media (max-width: 600px) { .credit-strip { top: 56px; width: calc(100% - 20px); max-width: none; flex-wrap: wrap; } .credit-strip .grow { flex-basis: calc(100% - 60px); } }
+.wallet-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px 10px; margin-bottom: 14px; }
+.wallet-panel .wl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.wallet-panel .wl-head h2 { margin: 0; font-size: 16px; }
+.wallet-panel .wl-total { font-size: 22px; font-weight: 700; }
+.wallet-panel .wl-total small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.wallet-panel .wl-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.wallet-panel .wl-row b { display: block; font-size: 14px; }
+.wallet-panel .wl-row small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.wallet-panel .wl-n { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wallet-panel .wl-order { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; }
+.paid-only-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
 /* Memory: the facts chats use to personalise answers (user menu > Memory) */
 .acct-rows > button.acct-link { display: flex; align-items: center; gap: 14px; padding: 10px 13px; font-size: 13.5px; text-align: left; border-top: 1px solid var(--line); background: none; width: 100%; color: inherit; }
 .acct-rows > button.acct-link:hover { background: rgb(var(--ink) / .04); }
