@@ -10,11 +10,12 @@ const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const num = (n) => Number(n).toLocaleString('en-US');
 
 // ---------- menu ----------
-const LINKS = [['Features', 'lp-feats'], ['Studios', 'lp-show'], ['Apps', 'lp-apps'], ['Pricing', 'lp-plans'], ['FAQ', 'lp-faq']];
+const LINKS = [['Features', 'lp-feats'], ['Studios', 'lp-show'], ['Models', 'lp-models'], ['Apps', 'lp-apps'], ['Pricing', 'lp-plans'], ['FAQ', 'lp-faq']];
 let pendingJump = '';
 function jump(id) {
   document.querySelector('.lp-mmenu')?.remove();
   const el = document.getElementById(id);
+  if (el && id === 'lp-models' && openDirectory) return openDirectory();
   if (el) return el.scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'start' });
   pendingJump = id; location.hash = '#/'; // from the Terms or Privacy page: open the landing page first
 }
@@ -251,7 +252,7 @@ function showcase() {
   return sec;
 }
 
-function howItWorks() {
+function howItWorks(openGate) {
   const steps = [
     ['pen', 'Describe it', 'Type what you want in plain words, or start from a template or a one-click app.'],
     ['sliders', 'Pick how it is made', 'Choose the model yourself, or let Studio Pro and Video Agent plan the work. You see the credit cost before you run anything.'],
@@ -262,8 +263,57 @@ function howItWorks() {
   return h('section', { class: 'lp-sec', id: 'lp-how' },
     head('How it works', 'From idea to finished file in three steps'),
     h('div', { class: 'lp-steps' }, steps.map(([ic, t, d], i) => h('div', { class: 'lp-step' }, h('span', { class: 'n' }, String(i + 1)), h('span', { class: 'ic' }, icon(ic)), h('b', {}, t), h('small', {}, d)))),
-    shown.length > 0 && h('div', { class: 'lp-models' }, h('small', {}, `${S.models.length} models, including`), shown.map((m) => h('span', { class: 'lp-model' }, modelLogo(m, 'logo-sm'), shortName(m)))),
+    shown.length > 0 && h('div', { class: 'lp-models' }, h('small', {}, `${uniqueModels().length} models, including`), shown.map((m) => h('span', { class: 'lp-model' }, modelLogo(m, 'logo-sm'), shortName(m)))),
+    shown.length > 0 && modelDirectory(openGate),
   );
+}
+
+// ---------- every model, with what it is good for ----------
+// Read from the public model list the page already loaded, so it always matches what the app offers. No prices here.
+const KINDS = [['all', 'All'], ['chat', 'Chat'], ['image', 'Image'], ['video', 'Video']];
+const KIND_LABEL = { chat: 'Chat', image: 'Image', video: 'Video' };
+const providerLabel = (m) => String(m.provider || '').split(' / ')[0];
+// The gateway can list one model twice under two ids; count and show it once.
+function uniqueModels() {
+  const seen = new Set();
+  return S.models.filter((m) => KIND_LABEL[m.type] && !seen.has(m.type + shortName(m)) && seen.add(m.type + shortName(m)));
+}
+let openDirectory = null; // set while the landing page is shown, used by the Models menu link
+function modelDirectory(openGate) {
+  const models = uniqueModels();
+  let kind = 'all', q = '', built = false;
+  const count = (k) => (k === 'all' ? models.length : models.filter((m) => m.type === k).length);
+  const tabs = h('div', { class: 'lp-dir-tabs', role: 'tablist', 'aria-label': 'Model type' });
+  const grid = h('div', { class: 'lp-dir-grid' });
+  const empty = h('p', { class: 'lp-dir-empty', hidden: '' }, 'No model matches that search.');
+  const search = h('input', { type: 'search', placeholder: 'Search models', 'aria-label': 'Search models', autocomplete: 'off', oninput: () => { q = search.value.trim().toLowerCase(); draw(); } });
+  const card = (m) => h('article', { class: 'lp-dir-card', 'data-type': m.type },
+    h('div', { class: 'lp-dir-top' }, modelLogo(m, 'logo'), h('div', { class: 'lp-dir-name' }, h('b', {}, shortName(m)), h('small', {}, providerLabel(m))),
+      h('button', { class: 'btn sm', 'aria-label': 'Try ' + shortName(m), onclick: () => openGate({ mode: m.type, modelId: m.id }) }, 'Try it')),
+    h('div', { class: 'lp-dir-tags' }, h('span', { class: 'tag lp-kind k-' + m.type }, KIND_LABEL[m.type]), m.useTag && h('span', { class: 'tag new' }, m.useTag)),
+    h('p', {}, m.blurb || ''),
+  );
+  const cards = new Map();
+  const draw = () => {
+    tabs.replaceChildren(...KINDS.filter(([k]) => count(k)).map(([k, label]) => h('button', { role: 'tab', class: k === kind ? 'on' : '', 'aria-selected': String(k === kind), onclick: () => { kind = k; draw(); } }, label, h('span', {}, String(count(k))))));
+    const list = models.filter((m) => (kind === 'all' || m.type === kind) && (!q || `${m.name} ${m.provider} ${m.useTag} ${m.blurb} ${KIND_LABEL[m.type]}`.toLowerCase().includes(q)));
+    grid.replaceChildren(...list.map((m) => cards.get(m.id) || cards.set(m.id, card(m)).get(m.id)));
+    empty.hidden = list.length > 0;
+  };
+  const panel = h('div', { class: 'lp-dir', id: 'lp-models-all', hidden: '' },
+    h('div', { class: 'lp-dir-bar' }, tabs, h('label', { class: 'lp-dir-search' }, icon('search'), search)),
+    grid, empty,
+  );
+  const btn = h('button', { class: 'btn lp-dir-toggle', 'aria-expanded': 'false', 'aria-controls': 'lp-models-all' });
+  const label = () => btn.replaceChildren(panel.hidden ? 'See all models' : 'Hide the model list', icon('down'));
+  const toggle = (show = panel.hidden) => {
+    if (show && !built) { built = true; draw(); } // the cards are only made the first time the list opens
+    panel.hidden = !show; btn.setAttribute('aria-expanded', String(show)); btn.classList.toggle('open', show); label();
+  };
+  btn.onclick = () => { const wasOpen = !panel.hidden; toggle(); if (wasOpen) btn.scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'center' }); };
+  label();
+  openDirectory = () => { toggle(true); panel.scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'start' }); };
+  return h('div', { class: 'lp-dir-wrap', id: 'lp-models' }, h('div', { class: 'lp-dir-cta' }, btn), panel);
 }
 
 function plans(examplesList) {
@@ -319,7 +369,7 @@ export function landingSections({ examplesList, appCover, openGate }) {
     S.apps.length > 8 && h('p', { class: 'lp-more' }, `And ${S.apps.length - 8} more inside. `, h('a', { href: '#/signup' }, 'Create a free account to see them all')),
   );
   if (pendingJump) { const id = pendingJump; pendingJump = ''; setTimeout(() => jump(id), 60); }
-  return [featureGrid(), showcase(), howItWorks(), apps, plans(examplesList), faq()];
+  return [featureGrid(), showcase(), howItWorks(openGate), apps, plans(examplesList), faq()];
 }
 
 // Numbers under the hero chat box, all read from the live app.
@@ -339,7 +389,7 @@ export function landingFooter() {
         h('p', {}, 'The AI studio for images, video, ads and documents, with every leading model in one account.'),
         h('a', { class: 'btn primary', href: '#/signup' }, 'Start free'),
       ),
-      col('Product', [jumpLink('Features', 'lp-feats'), jumpLink('Studios', 'lp-show'), jumpLink('AI Apps', 'lp-apps'), jumpLink('Pricing', 'lp-plans'), jumpLink('FAQ', 'lp-faq'), h('a', { href: '#/help' }, 'Help centre')]),
+      col('Product', [jumpLink('Features', 'lp-feats'), jumpLink('Studios', 'lp-show'), jumpLink('Models', 'lp-models'), jumpLink('AI Apps', 'lp-apps'), jumpLink('Pricing', 'lp-plans'), jumpLink('FAQ', 'lp-faq'), h('a', { href: '#/help' }, 'Help centre')]),
       col('Account', [h('a', { href: '#/signup' }, 'Create an account'), h('a', { href: '#/login' }, 'Log in')]),
       col('Legal', [h('a', { href: '#/terms' }, 'Terms of Use'), h('a', { href: '#/privacy' }, 'Privacy Policy')]),
       col('Contact', [h('a', { href: 'mailto:' + mail }, mail), h('address', {}, LEGAL_COMPANY, ADDRESS.map((l) => [h('br'), l]))]),

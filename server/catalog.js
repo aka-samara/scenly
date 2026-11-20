@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { usdToCredits, setDiscounts, markupFor } from './credits.js';
-import { blurbFor } from './blurbs.js';
+import { blurbFor, useTagFor } from './blurbs.js';
 import { refusedModels } from './gateway.js';
 
 import { flags } from './flags.js';
@@ -46,6 +46,7 @@ function build(raw) {
       description: sc.description || '',
       short: sc.short || '',
       blurb: blurbFor(m, type),
+      useTag: useTagFor(m, type),
       caps: sc.caps || [],
       vision: /image/i.test(inputs) && type === 'chat',
       pdfInput: /pdf/i.test(inputs),

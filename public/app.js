@@ -698,6 +698,7 @@ function openAccount() {
         h('div', {}, h('span', {}, 'Name'), h('b', {}, u.name)),
         h('div', {}, h('span', {}, 'Email'), h('b', {}, u.email)),
         h('div', {}, h('span', {}, 'Sign in with'), h('b', {}, how)),
+        h('button', { class: 'acct-link', onclick: () => { d.remove(); openMemory(); } }, h('span', {}, 'Memory'), h('b', {}, 'Name, location and facts for chats'), icon('arrow')),
       ),
       h('h4', { class: 'acct-h' }, u.hasPassword ? 'Change your password' : 'Add a password'),
       !u.hasPassword && h('p', { class: 'acct-p' }, 'You sign in with Google. Add a password if you also want to sign in with your email.'),
@@ -708,6 +709,91 @@ function openAccount() {
     foot: [h('button', { class: 'btn', onclick: () => d.remove() }, 'Close'), btn],
   });
   nw.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+}
+// Memory: the few facts about the person that chats use to personalise answers. From the user menu or Account.
+async function openMemory() {
+  let mem;
+  try { mem = (await api('/api/memory')).memory; } catch (ex) { return toast(ex.message, 'error'); }
+  const err = h('div', { class: 'form-err' });
+  const put = async (path, opts) => {
+    err.replaceChildren();
+    try { mem = (await api(path, opts)).memory; return true; } catch (ex) { err.replaceChildren(ex.message); return false; }
+  };
+  const sw = (key, label, sub) => {
+    const b = h('button', { type: 'button', class: 'mem-sw', role: 'switch', 'aria-checked': String(mem[key]), onclick: async () => {
+      if (await put('/api/memory', { method: 'PUT', body: { [key]: !mem[key] } })) paint();
+    } }, h('span', { class: 'mem-sw-t' }, h('b', {}, label), h('small', {}, sub)), h('span', { class: 'switch' + (mem[key] ? ' on' : '') }));
+    return b;
+  };
+  const basic = (key, label, ph) => {
+    const inp = h('input', { type: 'text', value: mem[key], placeholder: ph, maxlength: key === 'name' ? 60 : 80, autocomplete: 'off', enterkeyhint: 'done' });
+    const commit = async () => {
+      if (inp.value.trim() === mem[key]) return;
+      if (await put('/api/memory', { method: 'PUT', body: { [key]: inp.value } })) { inp.value = mem[key]; toast(mem[key] ? `${label} saved` : `${label} removed`); }
+    };
+    inp.addEventListener('change', commit);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+    return h('label', { class: 'mem-basic' }, h('span', {}, label), inp);
+  };
+  const list = h('div', { class: 'mem-list' });
+  const count = h('small', { class: 'mem-count' });
+  const addInp = h('input', { type: 'text', placeholder: 'Add something, like "Prefers short answers"', maxlength: 160, enterkeyhint: 'done' });
+  const add = async () => {
+    const t = addInp.value.trim(); if (!t) return addInp.focus();
+    if (await put('/api/memory/facts', { method: 'POST', body: { text: t } })) { addInp.value = ''; paint(); addInp.focus(); }
+  };
+  addInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  const factRow = (f) => {
+    const row = h('div', { class: 'mem-fact' });
+    const view = () => row.replaceChildren(
+      h('div', { class: 'mem-fact-t' }, f.text, f.source === 'chat' && h('small', { title: 'Picked up from one of your chats' }, 'from a chat')),
+      h('button', { class: 'icon-btn sm', title: 'Edit', 'aria-label': 'Edit', onclick: edit }, icon('pen')),
+      h('button', { class: 'icon-btn sm', title: 'Delete', 'aria-label': 'Delete', onclick: async () => { if (await put('/api/memory/facts/' + f.id, { method: 'DELETE' })) paint(); } }, icon('trash')),
+    );
+    const edit = () => {
+      const inp = h('input', { type: 'text', value: f.text, maxlength: 160, enterkeyhint: 'done' });
+      const ok = async () => { if (inp.value.trim() === f.text) return view(); if (await put('/api/memory/facts/' + f.id, { method: 'PATCH', body: { text: inp.value } })) paint(); };
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ok(); } else if (e.key === 'Escape') { e.stopPropagation(); view(); } });
+      row.replaceChildren(inp, h('button', { class: 'icon-btn sm', title: 'Save', 'aria-label': 'Save', onclick: ok }, icon('check')), h('button', { class: 'icon-btn sm', title: 'Cancel', 'aria-label': 'Cancel', onclick: view }, icon('x')));
+      inp.focus(); inp.select();
+    };
+    view();
+    return row;
+  };
+  const switches = h('div', { class: 'mem-sws' });
+  const paint = () => {
+    switches.replaceChildren(
+      sw('on', 'Use memory in chats', 'Answers can use your name, location and the facts below.'),
+      sw('learn', 'Pick up facts from my chats', 'When you mention something lasting about yourself, it is saved here.'),
+    );
+    list.replaceChildren(...(mem.facts.length ? mem.facts.map(factRow) : [h('div', { class: 'mem-empty' }, 'Nothing saved yet. Add a fact below, or just mention it in a chat.')]));
+    count.textContent = `${mem.facts.length} of ${mem.limits.facts}`;
+    addInp.disabled = mem.facts.length >= mem.limits.facts;
+  };
+  paint();
+  const d = dialog({
+    title: 'Memory',
+    sub: 'A few basics Scenly remembers to personalise your chat answers',
+    body: [
+      switches,
+      h('div', { class: 'mem-basics' }, basic('name', 'Name', mem.accountName ? `What should we call you? (${mem.accountName.split(/\s+/)[0]})` : 'What should we call you?'), basic('location', 'Location', 'City, country')),
+      h('div', { class: 'mem-head' }, h('div', { class: 'lab' }, 'Things to remember'), count),
+      list,
+      h('div', { class: 'mem-add' }, addInp, h('button', { class: 'btn primary sm', onclick: add }, 'Add')),
+      err,
+      h('p', { class: 'acct-p mem-note' }, 'Only you can see this. Saying "forget that I…" in a chat removes a fact too.'),
+    ],
+    foot: [
+      h('button', { class: 'btn ghost mem-clear', onclick: async () => {
+        if (!mem.facts.length && !mem.name && !mem.location) return toast('Memory is already empty.');
+        if (!confirm('Forget everything in your memory? This cannot be undone.')) return;
+        if (await put('/api/memory', { method: 'DELETE' })) { d.remove(); toast('Memory cleared'); }
+      } }, 'Forget everything'),
+      h('span', { class: 'grow' }),
+      h('button', { class: 'btn', onclick: () => d.remove() }, 'Done'),
+    ],
+  });
+  d.classList.add('mem-dlg');
 }
 function renderAuth(mode = 'login') {
   const isSignup = mode === 'signup';
@@ -1018,6 +1104,7 @@ function openUserMenu(anchor) {
     h('div', { style: { padding: '8px 10px', fontSize: '13px', color: 'var(--muted)' } }, S.user.email),
     h('hr'),
     h('button', { onclick: () => { closePop(); openAccount(); } }, icon('user'), 'Account & password'),
+    h('button', { onclick: () => { closePop(); openMemory(); } }, icon('brain'), 'Memory'),
     h('a', { href: '#/billing', onclick: closePop }, icon('coin'), 'Plans & credits'),
     h('a', { href: '#/assets', onclick: closePop }, icon('folder'), 'My assets'),
     h('a', { href: '#/help', onclick: closePop }, icon('help'), 'Help'),
@@ -2885,6 +2972,7 @@ function renderMessage(msg, isLast) {
   if (msg.error) body.append(errBox({ message: msg.error }, isLast && msg.mode === 'chat' ? () => submit({ regenerate: true }) : null));
   if (msg.note) body.append(h('div', { class: 'gen-note' }, msg.note));
   if (msg.stopped) body.append(h('div', { style: { color: 'var(--faint)', fontSize: '13px', marginTop: '6px' } }, 'Stopped'));
+  if (msg.memory?.length) body.append(memoryNote(msg.memory));
   const copyBtn = msg.content && h('button', { class: 'icon-btn sm', title: 'Copy', onclick: (e) => copyRich(msg.content, e.currentTarget) }, icon('copy'));
   const regen = isLast && msg.mode === 'chat' && h('button', { class: 'icon-btn sm', title: 'Regenerate', onclick: () => submit({ regenerate: true }) }, icon('retry'));
   const dlBtn = msg.mode === 'chat' && msg.content && !msg.doc && h('button', { class: 'icon-btn sm', title: 'Download as Word, PDF or other formats', onclick: (e) => openDownloadMenu(e.currentTarget, msg.content) }, icon('dl'));
@@ -2893,6 +2981,12 @@ function renderMessage(msg, isLast) {
     body,
     h('div', { class: 'msg-actions' }, copyBtn, dlBtn, regen, h('span', { class: 'spacer' }), msg.credits != null && h('span', { title: 'Credits used' }, `${fmtCredits(msg.credits)} credits`)),
   );
+}
+// "Memory updated" under an answer, when the person's message added or changed a fact about them.
+function memoryNote(changes) {
+  const saved = changes.filter((c) => c.kind === 'saved'), gone = changes.filter((c) => c.kind === 'forgot');
+  const text = [saved.length && `Saved: ${saved.map((c) => c.text).join(' · ')}`, gone.length && `Forgot: ${gone.map((c) => c.text).join(' · ')}`].filter(Boolean).join('. ');
+  return h('button', { class: 'mem-chip', title: 'Open your memory to change or delete this', onclick: openMemory }, icon('brain'), h('b', {}, 'Memory updated'), h('span', {}, text));
 }
 // True when the person's question asked for the code itself, so a web page in the answer stays as code.
 const CODE_ASK = /\b(code|coding|html|css|javascript|js|source|markup|snippet|script|syntax)\b/i;

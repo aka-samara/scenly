@@ -1,4 +1,5 @@
 // Video Agent: one prompt becomes a storyboard that opens in the Video Builder. Nothing is generated until it is approved there.
+import { micButton } from './voice.js';
 import { h, $, $$, icon, S, store, api, toast, errToast, info, topbar, fmtCredits, setCredits, popover, closePop, pickFiles } from './app.js';
 
 if (!$('#vb-css')) document.head.append(h('link', { id: 'vb-css', rel: 'stylesheet', href: '/builder.css' }));
@@ -31,7 +32,7 @@ export async function renderAgent() {
   ta.addEventListener('input', () => store.set('agent-draft', ta.value));
   const tabs = h('div', { class: 'va-tabs seg', id: 'va-tabs' }); const ideas = h('div', { class: 'va-ideas', id: 'va-ideas' }); const chips = h('div', { class: 'va-chips', id: 'va-chips' }); const gal = h('div', { class: 'va-gal', id: 'va-gal' });
   const chip = (label, id, value, opts, on, help) => { const s = h('select', { id, onchange: (e) => { on(e.target.value); keep(); draw(); } }, opts.map(([v, l]) => h('option', { value: v }, l))); s.value = String(value); return h('label', { class: 'va-chip' }, label, s, help && info(help)); };
-  const go = h('button', { class: 'btn primary', id: 'va-go' });
+  const go = h('button', { class: 'btn primary', id: 'va-go' }); const mic = micButton(ta); // made once, so a recording survives a redraw of the options
   const busy = (on) => { go.disabled = on; go.replaceChildren(on ? h('span', { class: 'spin' }) : icon('sparkle'), on ? 'Writing the storyboard…' : `Write the storyboard · ≈ ${INFO.storyboardCredits < 1 ? 'under 1 credit' : fmtCredits(INFO.storyboardCredits) + ' credits'}`); };
   go.onclick = async () => {
     let prompt = ta.value.trim();
@@ -63,7 +64,7 @@ export async function renderAgent() {
       h('label', { class: 'va-chip sw' }, 'Voice-over script', h('button', { class: 'switch' + (st.voiceover ? ' on' : ''), id: 'va-voice', role: 'switch', 'aria-checked': String(!!st.voiceover), onclick: () => { st.voiceover = !st.voiceover; keep(); draw(); } }), info('Writes what the voice says in each scene. Scenly cannot speak it for you yet (the AI service has no voice model), so record or upload your own voice in the Builder.')),
       h('label', { class: 'va-chip sw' }, '🔗 Keep Visual Continuity (Chain Scenes)', h('button', { class: 'switch' + (st.chain ? ' on' : ''), id: 'va-chain', role: 'switch', 'aria-checked': String(!!st.chain), onclick: () => { st.chain = !st.chain; keep(); draw(); } }), info('Each scene starts from the last picture of the scene before, so people, places and light stay the same from scene to scene. The scenes are then made one after another, which takes longer. You can switch it off for any single scene in the Builder.')),
       INFO.moods.length > 0 && chip('Music', 'va-music', st.music, [['none', 'No music'], ...INFO.moods.map((m) => [m, m])], (v) => { st.music = v; }, 'Adds a track with this mood from the music library. You can change it in the Builder.'),
-      h('div', { class: 'grow' }), go].filter(Boolean));
+      h('div', { class: 'grow' }), h('div', { class: 'va-send' }, mic, go)].filter(Boolean));
     gal.replaceChildren(...INFO.templates.filter((t) => st.tab === 'general' || t.tab === st.tab).map((t) => h('button', { class: 'va-tpl', 'data-tpl': t.id, onclick: () => {
       Object.assign(st, { tab: t.tab, ratio: t.ratio, seconds: t.seconds, style: t.style, voiceover: t.voiceover, music: t.music !== 'none' && INFO.moods.includes(t.music) ? t.music : 'none' }); keep();
       tpl = t; if (typeof INFO.tabs.find((x) => x.id === t.tab)?.defaults.chain === 'boolean') { st.chain = INFO.tabs.find((x) => x.id === t.tab).defaults.chain; keep(); }

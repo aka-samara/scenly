@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { serve } from './handover.js'; // must stay before every import that reads the database
 import express from 'express';
 import { mountVoice } from './voice.js';
+import { mountMemory, memoryPrompt, learnFromMessage } from './memory.js';
 import multer from 'multer';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -436,7 +437,9 @@ const chatHandler = wrap(async (req, res) => {
     if (docReq?.files?.length) conv.messages.findLast((m) => m.role === 'user').opened = docReq.files.map((f) => f.name);
   }
   const fileKind = isCode || docReq ? null : wantedFile(lastText);
-  const system = (isCode ? CODE_SYSTEM(conv.files) : CHAT_SYSTEM() + (fileKind ? FILE_SYSTEM(fileKind) : '')) + (proj ? '\n\n' + projectContext(user, proj, conv.id) : '');
+  // The person's memory (name, location, a few facts) personalises chat and document answers.
+  const mem = isCode ? '' : memoryPrompt(user);
+  const system = (isCode ? CODE_SYSTEM(conv.files) : CHAT_SYSTEM() + (fileKind ? FILE_SYSTEM(fileKind) : '')) + (mem ? '\n\n' + mem : '') + (proj ? '\n\n' + projectContext(user, proj, conv.id) : '');
   const messages = buildMessages(conv, model, docReq ? null : system, docReq ? { can: DOC_KINDS[docReq.kindId].importsInto ? DOC_KINDS[docReq.kindId].canImport : null, noun: DOC_KINDS[docReq.kindId].noun, pictures: !!DOC_KINDS[docReq.kindId].pictures } : null);
   if (proj) {
     proj.updatedAt = now();
@@ -460,6 +463,9 @@ const chatHandler = wrap(async (req, res) => {
   }
   const body = { model: model.id, messages, stream: true, stream_options: { include_usage: true } };
   if (affordableOut < 32000) body.max_tokens = affordableOut;
+  // Meanwhile a small model reads the new message for facts worth keeping (name, city, preferences).
+  const learning = isCode || regenerate ? null : learnFromMessage(user, lastText);
+  const learned = async () => (learning ? Promise.race([learning, new Promise((r) => setTimeout(() => r(null), 2500))]) : null);
 
   conv.updatedAt = now();
   conv.lastModel = model.id;
@@ -479,12 +485,14 @@ const chatHandler = wrap(async (req, res) => {
   if (docReq) {
     // Docs Studio: the model plans the file, Scenly checks it and builds it. Nothing is charged unless something is delivered.
     try {
-      const r = await runDocTurn({ user, conv, model, ...docReq, userText: String(lastText || ''), history: messages, signal: ctrl.signal, budgetUsd, status: (text) => { if (!res.writableEnded) send('status', { text }); }, projectContext: proj ? projectContext(user, proj, conv.id) : '' });
+      const r = await runDocTurn({ user, conv, model, ...docReq, userText: String(lastText || ''), history: messages, signal: ctrl.signal, budgetUsd, status: (text) => { if (!res.writableEnded) send('status', { text }); }, projectContext: [mem, proj ? projectContext(user, proj, conv.id) : ''].filter(Boolean).join('\n\n') });
       finished = true;
       reply.content = r.message;
       if (r.doc) reply.doc = r.doc;
       reply.credits = charge(user, usdToCredits(r.usage.usd, model), `${r.doc ? DOC_KINDS[r.doc.kind].label : 'Chat'} · ${model.name}`, { model: model.id, usd: r.usage.usd, conversationId: conv.id });
       reply.usage = { input: r.usage.input, output: r.usage.output };
+      const memo = await learned();
+      if (memo) reply.memory = memo;
       conv.messages.push(reply);
       conv.updatedAt = now();
       save();
@@ -539,6 +547,8 @@ const chatHandler = wrap(async (req, res) => {
   reply.credits = charge(user, usdToCredits(usd, model), `${isCode ? 'Code' : 'Chat'} · ${model.name}`, { model: model.id, usd, conversationId: conv.id });
   if (isCode) reply.ops = applyFileOps(conv.files, reply.content);
   reply.usage = usage ? { input: usage.prompt_tokens, output: usage.completion_tokens } : null;
+  const memo = reply.stopped ? null : await learned();
+  if (memo) reply.memory = memo;
   conv.messages.push(reply);
   conv.updatedAt = now();
   save();
@@ -797,6 +807,7 @@ app.post('/api/styles/:id/fav', requireUser, (req, res) => {
   res.json({ favs: req.user.styleFavs });
 });
 mountVoice(app, { requireUser, wrap });
+mountMemory(app, { requireUser, wrap });
 mountDownloads(app, { requireUser, wrap });
 mountBuilder(app, { requireUser, requireAdmin, wrap });
 mountAssist(app, { requireUser, wrap });

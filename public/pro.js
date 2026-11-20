@@ -1,6 +1,7 @@
 // Studio Pro: a second image + video studio that sits beside the Image, Video, Video Agent and Video Builder pages.
 // One section, several tools: Home, Agent (one line in, a finished ad, clip or film out), Image, Video and Enhancer.
 // Everything is made through the same server routes as the rest of Scenly, so results land in Assets and Recents.
+import { micButton } from './voice.js';
 import { h, $, $$, icon, S, store, api, toast, errToast, popover, closePop, pickFiles, uploadFiles, topbar, fmtCredits, setCredits, info, openLightbox, byId, modelLogo, shortName, refreshRecents } from './app.js';
 
 if (!$('#pro-css')) document.head.append(h('link', { id: 'pro-css', rel: 'stylesheet', href: '/pro.css' }));
@@ -114,7 +115,7 @@ function renderHome() {
       h('span', { class: 'eyebrow' }, icon('sparkle'), 'Studio Pro'),
       h('h1', {}, 'Describe it once. Get a finished ad, clip or short film.'),
       h('p', {}, 'The agent plans the shots, paints the frames, films them and cuts them together. You only approve.'),
-      h('div', { class: 'pro-ask' }, ta, h('button', { class: 'btn primary', id: 'pro-quick-go', onclick: go }, icon('sparkle'), 'Create'))),
+      h('div', { class: 'pro-ask' }, ta, micButton(ta), h('button', { class: 'btn primary', id: 'pro-quick-go', onclick: go }, icon('sparkle'), 'Create'))),
     h('div', { class: 'pro-tools' },
       card('agent', 'sparkle', 'Agent', 'One line in, a finished ad, UGC clip, short drama or product set out.', 'linear-gradient(135deg,#4361ee,#04d9ff)'),
       card('video', 'video', 'Video', 'Text, picture or video in. Camera bodies, lenses and camera moves built in.', 'linear-gradient(135deg,#ffb547,#ff7a45)'),
@@ -137,7 +138,7 @@ async function renderAgent(sid) {
   let templateId = pending?.templateId || ''; let cat = 'all'; const files = [];
   const keep = () => store.set('pro-agent', { kind: st.kind, ratio: st.ratio, seconds: st.seconds, auto: st.auto, quality: st.quality, characterId: st.characterId });
   const ta = h('textarea', { id: 'pa-prompt', maxlength: 3000, rows: 3, placeholder: 'What do you want to create? An ad, a UGC clip, a short drama, product shots…' }, pending?.prompt || store.get('pro-draft', ''));
-  ta.addEventListener('input', () => store.set('pro-draft', ta.value));
+  ta.addEventListener('input', () => store.set('pro-draft', ta.value)); const mic = micButton(ta);
   const strip = h('div', { class: 'pa-files', id: 'pa-files' }); const chips = h('div', { class: 'pa-chips', id: 'pa-chips' }); const gal = h('div', { class: 'pro-grid', id: 'pa-gal' }); const cats = h('div', { class: 'seg pa-cats', id: 'pa-cats' });
   const add = () => pickFiles('image/*', false, async (picked) => { const slot = { name: picked[0].name, busy: true }; files.push(slot); drawFiles(); try { const f = (await uploadFiles(picked))[0]; if (f) Object.assign(slot, { id: f.id, busy: false, preview: URL.createObjectURL(picked[0]) }); else files.splice(files.indexOf(slot), 1); } catch (e) { files.splice(files.indexOf(slot), 1); errToast(e); } drawFiles(); });
   const drawFiles = () => strip.replaceChildren(...files.map((f) => h('span', { class: 'pa-file' }, f.busy ? h('span', { class: 'spin' }) : h('img', { src: f.preview, alt: '' }), h('span', {}, f.name), h('button', { class: 'icon-btn sm', title: 'Remove', onclick: () => { files.splice(files.indexOf(f), 1); drawFiles(); } }, icon('x')))));
@@ -160,7 +161,7 @@ async function renderAgent(sid) {
       sel('pa-len', st.seconds, [[0, 'Length: auto'], [5, '5 s'], [10, '10 s'], [15, '15 s'], [30, '30 s'], [60, '1 min']], (v) => { st.seconds = Number(v); }, 'Length of a video'),
       sel('pa-quality', st.quality, INFO.qualities.map((q) => [q.id, `${q.id[0].toUpperCase() + q.id.slice(1)} video · ${q.resolution} · ${fmtCredits(q.perSecond)}/s`]), (v) => { st.quality = v; }, 'Video quality. Draft is the cheapest way to try an idea; make the final in Standard or High. Prices are credits per second of video.'),
       h('label', { class: 'pa-auto', title: 'On: the agent makes everything without stopping for your approval. Off: it shows you the plan and the price first.' }, 'Autopilot', h('button', { class: 'switch' + (st.auto ? ' on' : ''), id: 'pa-autopilot', role: 'switch', 'aria-checked': String(!!st.auto), onclick: () => { st.auto = !st.auto; keep(); draw(); } })),
-      h('button', { class: 'btn primary', id: 'pa-go', onclick: send }, icon('sparkle'), 'Create'));
+      mic, h('button', { class: 'btn primary', id: 'pa-go', onclick: send }, icon('sparkle'), 'Create'));
     cats.replaceChildren(...INFO.categories.map((c) => h('button', { class: c.id === cat ? 'on' : '', 'data-cat': c.id, onclick: () => { cat = c.id; draw(); } }, icon(c.icon), c.label)));
     gal.replaceChildren(...INFO.templates.filter((t) => cat === 'all' || t.cat === cat).map((t) => { const c = templateCard(t); c.onclick = () => { templateId = t.id; Object.assign(st, { kind: t.kind, ratio: t.ratio, seconds: [0, 5, 10, 15, 30, 60].includes(t.seconds) ? t.seconds : 0 }); keep(); ta.value = t.prompt; store.set('pro-draft', t.prompt); draw(); $('#main .scroll').scrollTo({ top: 0, behavior: 'smooth' }); ta.focus(); const a = t.prompt.indexOf('['), b = t.prompt.indexOf(']'); if (a >= 0 && b > a) ta.setSelectionRange(a, b + 1); }; return c; }));
   }
@@ -432,7 +433,7 @@ async function renderTool(mode) {
   const cost = () => { const m = model(); if (!m) return 0; return isVideo ? (fixed(m) ? 0 : (m.price.creditsPerSecond[st.resolution] || 0) * st.duration * st.count) : (m.price.creditsPerImage || 0) * st.count; };
 
   const panel = h('aside', { class: 'pt-panel', id: 'pt-panel' }); const feed = h('div', { class: 'pt-feed', id: 'pt-feed' }); const ta = h('textarea', { id: 'pt-prompt', maxlength: 4000, rows: 4 }, st.prompt);
-  ta.addEventListener('input', () => { st.prompt = ta.value; keep(); });
+  ta.addEventListener('input', () => { st.prompt = ta.value; keep(); }); const mic = micButton(ta);
   const link = h('input', { type: 'url', id: 'pt-url', maxlength: 1000, placeholder: 'or paste a direct link to a video (https://… .mp4)', oninput: (e) => { videoUrl = e.target.value.trim(); } });
   const addRef = (kind) => pickFiles(kind === 'video' ? 'video/*' : 'image/*', false, async (picked) => { const slot = { name: picked[0].name, kind, busy: true }; refs.push(slot); drawPanel(); try { const f = (await uploadFiles(picked))[0]; if (!f) throw new Error('That file could not be added.'); Object.assign(slot, { id: f.id, busy: false, preview: kind === 'image' ? URL.createObjectURL(picked[0]) : '' }); } catch (e) { refs.splice(refs.indexOf(slot), 1); errToast(e); } drawPanel(); });
   const row = (label, node, cls = '') => h('label', { class: 'pt-field ' + cls }, h('span', {}, label), node);
@@ -502,7 +503,7 @@ async function renderTool(mode) {
       canLock() && locked() && h('small', { class: 'fl-note' }, isVideo ? `An opening frame of ${locked().name} is painted first (${credits(INFO.imageModel?.credits || 0)}), then the video is filmed from it. The face is exact at the start and holds best in shots of 4 to 6 seconds.` : `${locked().name}'s photos are given to the image model with every picture.`),
       st.mode === 'restyle' && h('div', { class: 'pt-looks', id: 'pt-looks' }, INFO.restyles.map((x) => h('button', { class: 'chipbtn' + (st.restyle === x.id ? ' on' : ''), onclick: () => { st.restyle = x.id; keep(); drawPanel(); } }, x.label))),
       st.mode === 'product' && row('Scene', select('pt-scene', st.scene, SCENES.map((s) => [s, s[0].toUpperCase() + s.slice(1)]), (v) => { st.scene = v; })),
-      h('div', { class: 'pt-prompt' }, h('small', {}, 'Prompt'), ta),
+      h('div', { class: 'pt-prompt' }, h('div', { class: 'pt-prompt-head' }, h('small', {}, 'Prompt'), mic), ta),
       h('div', { class: 'pt-two' },
         isVideo && durs.length > 0 && row('Duration', h('div', { class: 'pt-stepper', id: 'pt-dur' }, h('button', { onclick: () => { const i = durs.indexOf(st.duration); if (i > 0) { st.duration = durs[i - 1]; keep(); drawPanel(); } } }, '−'), h('b', {}, st.duration + 's'), h('button', { onclick: () => { const i = durs.indexOf(st.duration); if (i < durs.length - 1) { st.duration = durs[i + 1]; keep(); drawPanel(); } } }, '+'))),
         isVideo && mdl && !fixed(mdl) && row('Aspect ratio', select('pt-ratio', st.ratio, mdl.video.ratios.filter((r) => r !== 'adaptive').map((r) => [r, r]), (v) => { st.ratio = v; })),

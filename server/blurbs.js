@@ -80,7 +80,41 @@ const BLURBS = {
 const key = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const FALLBACK = { chat: 'General chat, writing and questions', image: 'Creates and edits images', video: 'Turns text or images into video' };
 
-export function blurbFor(m, type) {
+// A short "best for" tag per model, shown on the landing page's model list. Same keys as BLURBS.
+// No prices here: these are about what a model is good at.
+const TAGS = {
+  claudefable5: 'Long tasks', claudefable51: 'Most capable', claudeopus45: 'Coding', claudeopus47: 'Reads images',
+  claudeopus48: 'Legal and finance', claudeopus5: 'Long tasks', claudeopus55: 'Best for reasoning',
+  claudesonnet46: 'Office work', claudesonnet5: 'Coding',
+  deepseekv4flash: 'Everyday', deepseekv41flash: 'Fast', deepseekv4pro: 'Maths and science',
+  gemini31flashlite: 'Fast', gemini31propreview: 'Best for reasoning', gemini35flash: 'Fast', gemini36flash: 'All-rounder',
+  glm5: 'Engineering', glm51: 'Agents', glm52: 'Long documents', glm53: 'Best for reasoning', glm53flash: 'Fast',
+  gpt54: 'Everyday', gpt54mini: 'Fast', gpt55: 'Agents', gpt55codex: 'Coding', gpt56luna: 'Fast',
+  gpt56sol: 'Research', gpt56terra: 'Everyday', gpt6astra: 'Most capable',
+  grok47: 'Live web search', hyvision20instruct: 'Reads images', hy3: 'Everyday', hy3preview: 'Preview', hy4preview: 'Preview',
+  kimik27code: 'Coding', kimik3: 'Long answers', mimov26flash: 'Audio and video', mimov26pro: 'Audio and video', minimaxm3: 'Research',
+  qwen36flash: 'Fast', qwen36plus: 'Reads images', qwen37max: 'Best for reasoning', qwen37plus: 'All-rounder',
+  qwen3827b: 'Compact', qwen38flash: 'Fast', qwen38max: 'Long documents',
+  gptimage2: 'High quality', gptimage2edits: 'Image editing', gptimage25: 'Transparent backgrounds',
+  nanobanana: 'Image editing', nanobanana2: 'Text in images', seedream50pro: 'Posters and layouts',
+  seedream50: 'Image sets', seedream50lite: 'Image sets',
+  dreaminaseedance20: 'Video with sound', doubaoseedance20: 'Social and ads', doubaoseedance20fast: 'Fast drafts',
+  doubaoseedance20mini: 'Quick previews', doubaoseedance25: 'Best quality', doubaoseedance25vision: 'Video editing',
+  dreaminaseedance25global: 'Long clips', seedance25260628: 'Long clips', seedance251080p: 'Full HD',
+  seedance25vision1080p: 'Video editing',
+};
+const TAG_FALLBACK = { chat: 'Chat', image: 'Images', video: 'Video' };
+
+function lookup(table, m) {
   const name = key(m.name).replace(/^doubao(?=seedream)/, '');
-  return BLURBS[name] || BLURBS[key(m.id)] || BLURBS[name.replace(/\d{6,}$/, '')] || FALLBACK[type] || '';
+  return table[name] || table[key(m.id)] || table[name.replace(/\d{6,}$/, '')];
+}
+
+export function blurbFor(m, type) {
+  return lookup(BLURBS, m) || FALLBACK[type] || '';
+}
+
+/** One short tag for what the model is best at; models not listed get "Fast" when the gateway says so, else their type. */
+export function useTagFor(m, type) {
+  return lookup(TAGS, m) || ((m.showcase?.caps || []).includes('fast') ? 'Fast' : TAG_FALLBACK[type] || '');
 }
