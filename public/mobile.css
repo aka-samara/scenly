@@ -26,7 +26,7 @@
   html body input:not([type=checkbox]):not([type=radio]):not([type=range]), html body textarea, html body select { font-size: 16px; }
 
   /* Bottom tab bar (mobile-nav.js). The app shell stops above it so docks and sticky buttons stay visible. */
-  :root { --tabbar: calc(58px + env(safe-area-inset-bottom)); }
+  :root { --tabbar: calc(46px + env(safe-area-inset-bottom)); }
   body.has-tabbar .shell { height: calc(100% - var(--tabbar)); }
   body.has-tabbar .mtab-bar { display: grid; }
   .mtab-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 58; height: var(--tabbar); padding: 0 6px env(safe-area-inset-bottom);
@@ -35,6 +35,9 @@
   .mtab-bar a, .mtab-bar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0;
     color: var(--faint); font-size: 10.5px; font-weight: 600; text-decoration: none; background: none; border: 0; padding: 0; }
   .mtab-bar .i { width: 22px; height: 22px; }
+  /* Icons only, so the bar stays slim and the page gets the room; each tab keeps its name for screen readers. */
+  .mtab-bar a > span, .mtab-bar button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .mtab-bar a, .mtab-bar button { gap: 0; }
   .mtab-bar .on { color: var(--accent); }
   /* While typing, the keyboard needs the room: hide the bar and give the page the full height back. */
   /* kb-open is set by mobile-nav.js when the on-screen keyboard takes part of the window. */
@@ -191,3 +194,25 @@
   html body .chat-hero { padding-top: 12vh; }
 }
 @media (max-width: 860px) { html body .cx-main .bar textarea { min-height: 52px; } }
+
+/* Ad Studio on narrow screens: one column that never grows past the screen (a "1fr" column grew to fit the
+   widest chip or field, so templates, brand kit fields, product chips and the Generate button ran off the right). */
+@media (max-width: 980px) {
+  html body .ad-cols, html body .ad-grid { grid-template-columns: minmax(0, 1fr); }
+  html body .ad-cols > *, html body .ad-kit, html body .ad-make, html body .ad-field { min-width: 0; max-width: 100%; }
+  html body .ad-tpls { grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); }
+  html body .ad-cards { grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); }
+  html body .ad-brands { grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); }
+  html body .ad-products .chipbtn, html body .ad-tags > * { max-width: 100%; min-width: 0; }
+  html body .ad-products .chipbtn { overflow: hidden; text-overflow: ellipsis; }
+  html body .ad-go-row { flex-wrap: wrap; }
+  html body .ad-go-row .pa-auto { white-space: nowrap; }
+  html body .ad-go-row > .btn, html body .ad-go-row > button { flex: 1 1 auto; justify-content: center; max-width: 100%; min-width: 0; }
+  html body .ad-field :is(input, textarea, select) { width: 100%; max-width: 100%; box-sizing: border-box; }
+}
+@media (max-width: 640px) {
+  /* Long switch labels (Keep Visual Continuity) wrap instead of pushing the help icon off the card. */
+  html body .va-chip.sw { white-space: normal; }
+  /* Character cards: the action row wraps when a narrow card cannot fit Image, Video and the ⋯ button. */
+  html body .ch-card .acts { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
+}
