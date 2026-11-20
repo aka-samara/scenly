@@ -1,6 +1,6 @@
 // Prompt enhancer for every prompt box: one small sparkle button that rewrites what you typed into a
 // better prompt for where you are (a chat message, a picture, a video, a Builder scene, an agent brief,
-// a brand-kit field). It never runs by itself and is charged only when you press it (well under 1 credit).
+// a brand-kit field). It never runs by itself and is charged only when you press it (usually under 1 credit).
 //
 // While it works, a slim status line sits on top of the prompt box (like voice input does) and the box
 // shimmers; when it is done, the line offers Undo, which puts your own words back. Typing again hides it.
@@ -80,7 +80,7 @@ function drawBtn(st) {
   btn.classList.toggle('busy', !!st.busy); btn.classList.toggle('on', !!st.undo);
   ready(btn, !st.busy && !st.undo && st.ta.value.trim().length >= 3);
   btn.replaceChildren(st.busy ? h('span', { class: 'enh-spin' }) : icon(st.undo ? 'undo' : 'sparkle'));
-  const tip = st.busy ? 'Enhancing…' : st.undo ? 'Undo: bring my own words back' : `Enhance my ${LABEL[st.place.mode(st.ta)] || 'prompt'} with AI (well under 1 credit)`;
+  const tip = st.busy ? 'Enhancing…' : st.undo ? 'Undo: bring my own words back' : `Enhance my ${LABEL[st.place.mode(st.ta)] || 'prompt'} with AI (usually under 1 credit)`;
   btn.title = tip; btn.setAttribute('aria-label', tip);
 }
 

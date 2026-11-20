@@ -10,7 +10,7 @@ import { KINDS as DOC_KINDS } from './docs/kinds/index.js';
 import { flags } from './flags.js';
 import { mailReady } from './mail.js';
 import { CREDIT_USD, MARGIN_PCT, MASTER_DISCOUNT_PCT, markupFor, markupOf } from './credits.js';
-import { getCatalog } from './catalog.js';
+import { getCatalog, TYPICAL_MSG } from './catalog.js';
 
 db.adminAudit ||= [];
 const DAY = 864e5;
@@ -408,8 +408,8 @@ export function mountAdmin(app, { requireUser, requireAdmin, wrap }) {
 
   app.get('/api/admin/audit', ...A, (_req, res) => res.json({ audit: db.adminAudit.slice(-300).reverse() }));
 
-  // What every model costs and what users pay for it, one typical unit each: a chat message (1,500 tokens in,
-  // 700 out), one image, or one second of video. official = the maker's own price; aicredit = the listed
+  // What every model costs and what users pay for it, one typical unit each: a chat message (TYPICAL_MSG:
+  // 3,000 tokens in, 1,300 out), one image, or one second of video. official = the maker's own price; aicredit = the listed
   // AICredit price (official less its discount); cost = what Scenly really pays (listed less the master
   // discount on the account); charged = what the user pays in credits, as dollars.
   app.get('/api/admin/pricing', ...A, async (_req, res, next) => {
@@ -418,7 +418,7 @@ export function mountAdmin(app, { requireUser, requireAdmin, wrap }) {
       const rows = [];
       for (const m of await getCatalog()) {
         const disc = 1 - (m.discountPct || 0) / 100; let unit, aicredit;
-        if (m.type === 'chat') { unit = 'message'; aicredit = (1500 * (m.price.inPerM || 0) + 700 * (m.price.outPerM || 0)) / 1e6; }
+        if (m.type === 'chat') { unit = 'message'; aicredit = (TYPICAL_MSG.input * (m.price.inPerM || 0) + TYPICAL_MSG.output * (m.price.outPerM || 0)) / 1e6; }
         else if (m.type === 'image') { unit = 'image'; aicredit = m.price.usdPerImage || 0; }
         else { const r = m.price.usdPerSecond?.['720p'] != null ? '720p' : Object.keys(m.price.usdPerSecond || {})[0]; unit = `second (${r})`; aicredit = m.price.usdPerSecond?.[r] || 0; }
         if (!(aicredit > 0)) continue;

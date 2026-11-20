@@ -384,7 +384,7 @@ async function systemTab() {
       kpi('Jobs waiting', n0(hl.counts.jobsWaiting), `${hl.counts.sessions} sign-ins`),
     )),
     pr && card('Model pricing', h('div', {},
-      h('p', { class: 'dim small', style: { margin: '0 0 10px' } }, `Users pay the AICredit price plus ${pct(pr.marginPct)}. A model whose price with that margin would go above its official price is charged at the AICredit price with no margin. Your cost is the AICredit price less your ${pct(pr.masterDiscountPct)} master discount. One typical unit per model: a chat message (1,500 tokens in, 700 out), one image, one second of video.`),
+      h('p', { class: 'dim small', style: { margin: '0 0 10px' } }, `Users pay the AICredit price plus ${pct(pr.marginPct)}. A model whose price with that margin would go above its official price is charged at the AICredit price with no margin. Your cost is the AICredit price less your ${pct(pr.masterDiscountPct)} master discount. One typical unit per model: a chat message (3,000 tokens in, 1,300 out), one image, one second of video.`),
       table([
         { label: 'Model', get: (m) => m.name },
         { label: 'Kind', get: (m) => KIND[m.type] || m.type },
