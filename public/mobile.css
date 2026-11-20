@@ -216,3 +216,23 @@
   /* Character cards: the action row wraps when a narrow card cannot fit Image, Video and the ⋯ button. */
   html body .ch-card .acts { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
 }
+
+/* ---------- Phones and tablets: Image and Video pages ----------
+   The prompt box and the tip banner used to float over the page with see-through backgrounds, so idea cards and
+   results showed through them and the banner's text drew on top of a card's text. Here the box sits in its own
+   solid strip at the bottom and the page scrolls above it, so nothing can slide underneath. */
+@media (max-width: 860px) {
+  html body .studio > .dock { position: relative; left: auto; right: auto; bottom: auto; flex: none; z-index: 15;
+    padding: 6px 10px 8px; background: var(--bg); border-top: 1px solid var(--line); }
+  html body .studio .scroll { padding-bottom: 20px; }
+  html body .studio .bar { background: var(--panel-m, var(--panel)); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  html body .studio .tip-banner { background: var(--panel); border-color: rgba(67,97,238,.35); font-size: 12.5px; line-height: 1.35; padding: 6px 6px 6px 10px; margin-bottom: 6px; }
+  :root[data-theme="light"] .studio .tip-banner { background: #fff; }
+  /* The empty-page greeting stays centred in the space above the box. */
+  html body .studio-empty { bottom: 300px; }
+  /* The text in the box keeps clear of the floating "large editor" button. */
+  html body .studio .bar textarea { padding-right: 34px; }
+  /* "Reference" fits inside its dashed square. */
+  html body .mat-add { font-size: 9.5px; letter-spacing: -.01em; overflow: hidden; }
+  html body .mat-add > div { max-width: 100%; }
+}
