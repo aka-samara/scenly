@@ -197,7 +197,23 @@ async function api(path, opts = {}) {
   } finally { clearTimeout(timer); }
   const j = await res.json().catch(() => ({}));
   if (!res.ok) { const e = new Error(j.error || `Request failed (${res.status})`); e.status = res.status; e.code = j.code; throw e; }
+  if (opts.method && opts.method !== 'GET' && RECENT_WRITES.test(path)) recentsSoon();
   return j;
+}
+// Work on something saved (a document, a video project, a Studio Pro session, an ad brand, an edited picture, an app run)
+// moves it to the top of Recents straight away, on whichever page the change was made.
+const RECENT_WRITES = /^\/api\/(docs\/|builder\/projects(\/[^/]+\/|$)|agent\/|pro\/(sessions|brands|frame|clip|import|enhance)|edit\b|generate\b|apps\/[^/]+\/run|conversations\/[^/]+\/touch)/;
+let recentsTimer = null, recentsBusy = false;
+function recentsSoon(wait = 1200) {
+  clearTimeout(recentsTimer);
+  recentsTimer = setTimeout(async () => {
+    if (!S.user) return;
+    // A first image, video or chat that is still being made has a working entry; the list is read again once it has its real one.
+    if (recentsBusy || S.conversations.some((c) => c.temp)) return recentsSoon(2500);
+    recentsBusy = true;
+    try { const [c, v] = await Promise.all([api('/api/conversations'), builderRecents()]); if (!S.conversations.some((x) => x.temp)) { S.conversations = mixRecents(c.conversations, v); renderRecents(); } }
+    catch { /* the next change tries again */ } finally { recentsBusy = false; }
+  }, wait);
 }
 
 function toast(msg, type = '') {
