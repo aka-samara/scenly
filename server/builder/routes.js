@@ -7,7 +7,7 @@ import multer from 'multer';
 import db, { save, id, now, DATA_DIR } from '../db.js';
 import { flags } from '../flags.js';
 import { getCatalog, findModel } from '../catalog.js';
-import { reserve, usdToCredits, round2, canAfford } from '../credits.js';
+import { reserve, usdToCredits, round2, canAfford, needCredits } from '../credits.js';
 import { forget, keys, abs, put, putFile, locate, hasBytes, sizeOf, contentDisposition, looksLike, limits, MB, safeExt } from '../storage.js';
 import { ffmpegInfo, needFfmpeg, probe, ffmpeg, FFMPEG_HELP, BURN_HELP } from '../ffmpeg.js';
 import { defineJob, enqueue, getJob, publicJob, cancelJob } from '../jobs.js';
@@ -318,7 +318,7 @@ export async function startScenes(user, p, targets, { idem = id('i_'), edit = nu
   }
   const total = round2(plan.reduce((n, x) => n + x.reserved, 0));
   if (dryRun) return { jobs: [], total, credits: round2(plan.reduce((n, x) => n + x.credits, 0)), plan };
-  if (!canAfford(user, total)) throw new UserError(`Not enough credits. ${plan.length > 1 ? `These ${plan.length} scenes need` : 'This scene needs'} about ${Math.ceil(total)} credits and you have ${Math.floor(user.credits)}.`, 402, 'insufficient_credits');
+  needCredits(user, total);
   const jobs = [];
   for (const x of plan) {
     const key = `${idem}:${x.s.id}`;

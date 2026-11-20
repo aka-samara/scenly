@@ -8,7 +8,7 @@ import os from 'node:os';
 import db, { save, id, now } from '../db.js';
 import { flags } from '../flags.js';
 import { getCatalog } from '../catalog.js';
-import { canAfford, round2 } from '../credits.js';
+import { canAfford, round2, needCredits } from '../credits.js';
 import { keys, put, putFile, locate, hasBytes } from '../storage.js';
 import { ffmpeg, needFfmpeg } from '../ffmpeg.js';
 import { UserError, publicFileUrl } from '../generate.js';
@@ -130,7 +130,7 @@ export function mountPrecision(app, { requireUser, wrap }) {
     // AI actions: everything is checked and priced before the project is touched
     if (start) {
       const dry = await startScenes(req.user, { ...p, scenes }, [start.scene], { edit, dryRun: true });
-      if (!canAfford(req.user, dry.total)) throw new UserError(`Not enough credits. This needs about ${Math.ceil(dry.total)} credits and you have ${Math.floor(req.user.credits)}.`, 402, 'insufficient_credits');
+      needCredits(req.user, dry.total);
       if (action === 'retake') mid.refFileId = (await frameFile(userId, src, at(a), `Frame from scene ${i + 1}.jpg`)).id; // the retake starts from the picture at the start of the selection
       if (action === 'change') edit.fileId = (await cutFile(userId, src, at(a), mid.rangeLen)).id;
     }

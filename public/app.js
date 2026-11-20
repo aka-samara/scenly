@@ -228,9 +228,42 @@ function errToast(e) {
 
 function setCredits(c) {
   if (!S.user || c == null) return;
+  // Spending takes plan and top-up credits before free ones, so a drop comes off the paid part first.
+  const w = S.user.wallet, drop = Number(S.user.credits || 0) - c;
+  if (w && drop > 0) { w.paid = Math.max(0, (w.paid || 0) - drop); if (!(w.paid > 0.005) && S.user.paidPlan && S.user.plan !== 'free') S.user.proPaused = true; }
   S.user.credits = c;
   $$('[data-credits]').forEach((el) => (el.textContent = fmtCredits(c)));
   const bar = $('#credit-bar'); if (bar) bar.style.width = creditPct() + '%';
+  creditBanner(true);
+}
+
+// Low balance, paused Pro tools and top-ups about to expire: one strip under the top bar of every page.
+// Closing it hides that message for this browser session; a new, more urgent message shows again.
+const dateShort = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
+function creditNote() {
+  const u = S.user; if (!u || u.isAdmin && u.credits > 0) return null;
+  const w = u.wallet || {}, bal = Number(u.credits || 0), sec = (location.hash.split('/')[1] || '');
+  const proPage = ['builder', 'agent', 'pro', 'ads'].includes(sec);
+  if (proPage && u.proPaused) return { key: 'paused', tone: 'warn', text: `Pro tools are paused: you have no plan or top-up credits left. ${u.billing?.renewsAt && u.plan !== 'free' ? `They come back when your plan renews on ${dateShort(u.billing.renewsAt)}, or ` : 'They come back '}when you top up.`, cta: 'Top up' };
+  if (bal < 10) return { key: 'out', tone: 'warn', text: 'You are out of credits. Top up or pick a plan to keep creating.', cta: 'Get credits' };
+  if (bal < (u.lowCreditAt || 0)) return { key: 'low', tone: 'warn', text: `Low balance: ${fmtCredits(bal)} credits left.${w.paid > 0 || u.plan !== 'free' ? ' Pro tools pause at zero.' : ''}`, cta: 'Top up' };
+  const soon = (w.packs || []).filter((p) => p.expiresAt && Date.parse(p.expiresAt) - Date.now() < 7 * 864e5 && p.credits >= 1);
+  if (soon.length) { const n = soon.reduce((t, p) => t + p.credits, 0); return { key: 'exp' + soon[0].expiresAt, tone: '', text: `${fmtCredits(n)} top-up credits expire on ${dateShort(soon[0].expiresAt)}. They are used before your other top-ups.`, cta: 'See credits' }; }
+  return null;
+}
+function creditBanner(refresh) {
+  const main = $('#main'); if (!main) return;
+  const old = main.querySelector('.credit-strip');
+  const n = creditNote();
+  const hidden = n && sessionStorage.getItem('pm-credit-strip') === n.key;
+  if (!n || hidden) { old?.remove(); return; }
+  if (old && old.dataset.key === n.key && !refresh) return;
+  if (!main.querySelector('.topbar')) return;
+  const el = h('div', { class: 'credit-strip' + (n.tone ? ' ' + n.tone : ''), 'data-key': n.key, role: 'status' },
+    icon('bolt'), h('span', { class: 'grow' }, n.text),
+    h('a', { class: 'btn sm primary', href: '#/billing' }, n.cta),
+    h('button', { class: 'icon-btn', title: 'Hide', 'aria-label': 'Hide', onclick: () => { try { sessionStorage.setItem('pm-credit-strip', n.key); } catch {} el.remove(); } }, icon('x')));
+  if (old) old.replaceWith(el); else main.append(el); // floats under the top bar (styles.css), whatever the page layout
 }
 const creditPct = () => { const plan = S.config?.plans.find((p) => p.id === S.user?.plan) || S.config?.plans[0]; return Math.max(2, Math.min(100, (S.user.credits / (plan?.credits || 100)) * 100)); };
 
@@ -682,7 +715,7 @@ function renderAuth(mode = 'login') {
   form.prepend(
     h('a', { class: 'brand', href: '#/', title: 'Back to the home page' }, h('img', { src: '/logo.svg', alt: '' }), 'Scenly'),
     h('h1', {}, isSignup ? 'Create your free account' : 'Welcome back'),
-    h('p', {}, isSignup ? `Start your free trial with ${S.config.plans[0].credits} credits.` : 'Sign in to keep creating.'),
+    h('p', {}, isSignup ? `Start free with ${Number(S.config.plans[0].credits).toLocaleString()} starter credits for Chat, Image, Video Studio, Docs, Code and AI Apps. No card needed.` : 'Sign in to keep creating.'),
   );
   $('#app').replaceChildren(h('div', { class: 'auth' },
     h('div', { class: 'auth-art' }, glowArt(),
@@ -718,7 +751,7 @@ function openGate(it, mode = 'signup') {
       h('button', { class: 'icon-btn gate-x', title: 'Close', onclick: () => bg.remove() }, icon('x')),
       h('div', { class: 'brand' }, h('img', { src: '/logo.svg', alt: '' }), 'Scenly'),
       h('h2', {}, signup ? 'Create a free account to continue' : 'Sign in to continue'),
-      h('p', { class: 'gate-sub' }, signup ? `Start your free trial with ${free} credits. It takes a few seconds${it?.text ? ', then your message is sent for you' : ''}.` : it?.text ? 'Your message is sent as soon as you are in.' : 'Welcome back.'),
+      h('p', { class: 'gate-sub' }, signup ? `Start free with ${Number(free).toLocaleString()} starter credits. It takes a few seconds${it?.text ? ', then your message is sent for you' : ''}.` : it?.text ? 'Your message is sent as soon as you are in.' : 'Welcome back.'),
       what && h('div', { class: 'gate-quote' + (picked ? ' with-model' : '') }, picked && modelLogo(picked, 'logo'), h('div', { class: 'gq' }, h('small', {}, what, picked && it.text ? ` · ${shortName(picked)}` : ''), !app && it.text && h('div', {}, it.text))),
       form,
     ));
@@ -856,19 +889,20 @@ const PAID_TOOLS = {
 };
 // Locked only when the server says this account has no paid plan. Admins always get in, and a server that has
 // not been restarted yet (it does not send paidPlan) locks nothing.
+// Open with an active monthly plan or paid credits (plan or top-up) left; the free starter credits do not open them.
 const hasPaidTools = () => !!S.user && (S.user.isAdmin || S.user.paidPlan !== false);
 const needsPaidPlan = (section) => !!PAID_TOOLS[section] && !hasPaidTools();
-const paidTag = () => (hasPaidTools() ? h('span', { class: 'tag new' }, 'New') : h('span', { class: 'tag dim', title: 'In the Pro, Max and Ultra plans' }, 'Pro'));
+const paidTag = () => (hasPaidTools() ? h('span', { class: 'tag new' }, 'New') : h('span', { class: 'tag dim', title: 'Opens with a monthly plan or a top-up pack' }, 'Pro'));
 function renderPaidOnly(section) {
   const [name, ic, what] = PAID_TOOLS[section];
   const plans = S.config.plans.filter((p) => p.priceUsd > 0);
   $('#main').replaceChildren(topbar(), h('div', { class: 'scroll' }, h('div', { class: 'paid-only' },
     h('div', { class: 'up-ico' }, icon(ic)),
-    h('h1', {}, `${name} is part of the paid plans`),
+    h('h1', {}, `${name} is a Pro tool`),
     h('p', { class: 'sub' }, what),
-    h('p', { class: 'sub' }, 'Chat, images, Video Studio, documents, Code and the AI apps stay free to use with your credits.'),
+    h('p', { class: 'sub' }, 'Pro tools open with a monthly plan or any top-up pack, and stay open while you have plan or top-up credits left. Your free starter credits work in Chat, Image, Video Studio, Docs, Code and AI Apps.'),
     h('div', { class: 'paid-only-plans' }, plans.map((p) => h('a', { class: 'up-plan' + (p.popular ? ' pop' : ''), href: '#/billing' }, h('b', {}, p.name), h('span', {}, `$${p.priceUsd}/month`), h('small', {}, `${p.credits.toLocaleString()} credits each month`)))),
-    h('a', { class: 'btn primary', href: '#/billing' }, 'See plans'),
+    h('div', { class: 'paid-only-btns' }, h('a', { class: 'btn primary', href: '#/billing' }, 'See plans'), h('a', { class: 'btn', href: '#/billing/packs' }, 'Buy a top-up pack (no subscription)')),
   )));
 }
 function navLink(href, nav, ic, label, tag) {
@@ -917,6 +951,8 @@ function renderShell() {
   $('#app').replaceChildren(shell);
   renderRecents();
   setupDrop();
+  let queued = false; // pages rebuild parts of #main often (a chat streams); check at most once a frame
+  new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; creditBanner(); }); }).observe($('#main'), { childList: true, subtree: true });
 }
 function toggleSidebar() {
   const sh = $('#shell');
@@ -1427,7 +1463,7 @@ function openStyleLib(anchor, { onPick, cat: startCat, current } = {}) {
       slot = h('div', { class: 'st-ask' }, h('b', {}, `${ask.name}: ${ask.variable.label.toLowerCase()}`),
         h('div', { class: 'opt-row' }, ask.variable.options.map((o) => h('button', { class: 'opt', onclick: () => pick(ask, o) }, o))), custom);
     } else if (locked) {
-      slot = h('div', { class: 'st-ask lockmsg' }, icon('lock'), h('div', { class: 'grow' }, h('b', {}, `${locked.name} is in the full Design Library`), h('small', {}, 'Any paid plan or credit pack unlocks all 36 styles.')), h('a', { class: 'btn primary sm', href: '#/billing', onclick: () => { closePop(); $('.lightbox')?.remove(); } }, 'See plans'));
+      slot = h('div', { class: 'st-ask lockmsg' }, icon('lock'), h('div', { class: 'grow' }, h('b', {}, `${locked.name} is in the full Design Library`), h('small', {}, 'Any paid plan or top-up pack unlocks all 36 styles.')), h('a', { class: 'btn primary sm', href: '#/billing', onclick: () => { closePop(); $('.lightbox')?.remove(); } }, 'See plans'));
     }
     const free = styles.filter((s) => !s.locked).length;
     body.replaceChildren(...[
@@ -1435,7 +1471,7 @@ function openStyleLib(anchor, { onPick, cat: startCat, current } = {}) {
       h('div', { class: 'opt-row st-cats' }, tabs.map(([k, l]) => h('button', { class: 'opt' + (cat === k ? ' on' : ''), 'data-cat': k, onclick: () => { cat = k; if (!startCat) styleCat = k; ask = locked = null; draw(); } }, k === 'fav' && icon('star'), l))),
       slot,
       list.length ? h('div', { class: 'st-grid' }, list.map(tile)) : h('div', { class: 'empty', style: { padding: '26px 10px' } }, cat === 'fav' ? 'No favourites yet. Press the star on a style to keep it here.' : 'Nothing here.'),
-      !unlocked && free < styles.length && h('div', { class: 'st-foot' }, icon('lock'), h('span', { class: 'grow' }, `The free trial includes ${free} of ${styles.length} styles. Any paid plan or credit pack unlocks them all.`), h('a', { href: '#/billing', onclick: () => { closePop(); $('.lightbox')?.remove(); } }, 'See plans')),
+      !unlocked && free < styles.length && h('div', { class: 'st-foot' }, icon('lock'), h('span', { class: 'grow' }, `The free trial includes ${free} of ${styles.length} styles. Any paid plan or top-up pack unlocks them all.`), h('a', { href: '#/billing', onclick: () => { closePop(); $('.lightbox')?.remove(); } }, 'See plans')),
     ].filter(Boolean));
     if (slot) body.scrollIntoView?.({ block: 'nearest' });
     if (slot && body.parentElement) body.parentElement.scrollTop = 0;
@@ -3112,6 +3148,7 @@ async function renderBilling() {
   // There is nothing to switch or cancel, so every plan button starts a monthly plan instead.
   const oneTime = subs && b.user.plan !== 'free' && bv.hasSub === false;
   const dateTxt = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+  const packDays = b.user.wallet?.packDays || 90;
   const post = async (url, body, btn) => {
     if (btn) btn.disabled = true;
     try { const r = await api(url, { method: 'POST', body }); if (r.url) { location.href = r.url; return r; } await refresh(); return r; }
@@ -3132,11 +3169,11 @@ async function renderBilling() {
     if (!subs) return null;
     let line, tone = '';
     if (onPaid && bv.status === 'past_due') { line = 'Your last payment did not go through. Update your card to keep your plan.'; tone = ' warn'; }
-    else if (onPaid && bv.endsAt) line = `Your plan ends on ${dateTxt(bv.endsAt)}. You keep your credits after that.`;
-    else if (onPaid && bv.renewsAt) line = `Renews on ${dateTxt(bv.renewsAt)} with ${curPlan.credits.toLocaleString()} new credits.`;
-    else if (bv.trial) line = b.user.credits > 0.005 / (S.config.creditUsd || 0.001) ? `You are on the free trial with ${fmtCredits(b.user.credits)} credits left. Upgrade any time for monthly credits.` : 'You have used your free trial credits. Choose a plan or a credit pack to keep going.';
+    else if (onPaid && bv.endsAt) line = `Your plan ends on ${dateTxt(bv.endsAt)}. Plan credits can be used until then; top-up credits stay valid to their own dates.`;
+    else if (onPaid && bv.renewsAt) line = `Renews on ${dateTxt(bv.renewsAt)} with ${curPlan.credits.toLocaleString()} fresh credits. Unused plan credits expire then.`;
+    else if (bv.trial) line = b.user.credits > 0.005 / (S.config.creditUsd || 0.001) ? `You are on the free plan with ${fmtCredits(b.user.credits)} credits left. Upgrade or buy a top-up pack any time.` : 'You have used your free starter credits. Choose a plan or a top-up pack to keep going.';
     else if (oneTime) line = `You have ${curPlan.name} from a one-time purchase, so it does not renew by itself. Start a monthly plan below to get new credits every month.`;
-    else line = 'You are on the free plan. Choose a plan or a credit pack to get more credits.';
+    else line = 'You are on the free plan. Choose a monthly plan or a top-up pack to get more credits and open the Pro tools.';
     const extra = [];
     if (onPaid && bv.nextPayment && bv.status !== 'past_due') extra.push(`Next payment ${money(bv.nextPayment.amountUsd)} on ${dateTxt(bv.nextPayment.at)}`);
     if (bv.card) extra.push(`${bv.card.brand ? bv.card.brand[0].toUpperCase() + bv.card.brand.slice(1) : 'Card'} ending ${bv.card.last4}, expires ${String(bv.card.expMonth).padStart(2, '0')}/${String(bv.card.expYear).slice(-2)}`);
@@ -3145,7 +3182,7 @@ async function renderBilling() {
     if (onPaid && bv.status !== 'past_due') {
       const cb = h('button', { class: 'btn ghost' }, bv.endsAt ? 'Keep my plan' : 'Cancel plan');
       cb.onclick = async () => {
-        if (!bv.endsAt && !confirm(`Cancel ${curPlan.name}?\n\nYour plan stays until ${dateTxt(bv.renewsAt || new Date())} and your credits stay after that. You will not be charged again.`)) return;
+        if (!bv.endsAt && !confirm(`Cancel ${curPlan.name}?\n\nYour plan and its credits stay until ${dateTxt(bv.renewsAt || new Date())}. Unused plan credits expire then; top-up credits keep their own dates. You will not be charged again.`)) return;
         const r = await post('/api/billing/cancel', { cancel: !bv.endsAt }, cb);
         if (r) toast(bv.endsAt ? 'Your plan will renew as normal.' : 'Your plan is cancelled. It stays until the end of this month.');
       };
@@ -3186,26 +3223,41 @@ async function renderBilling() {
   const packCard = (p) => {
     const btn = h('button', { class: 'btn', 'data-pack': p.id }, `Buy for $${p.priceUsd}`);
     btn.onclick = () => buy(p, btn);
-    return h('div', { class: 'card' }, h('h3', {}, p.name), h('div', { class: 'tl' }, p.note || 'One-time top-up, never expires'), h('div', { class: 'price' }, `$${p.priceUsd}`), examplesList(p.credits), btn);
+    return h('div', { class: 'card' }, h('h3', {}, p.name), h('div', { class: 'tl' }, p.note || `One-time top-up, valid ${packDays} days`), h('div', { class: 'price' }, `$${p.priceUsd}`), examplesList(p.credits), btn);
   };
   const order = { video: 0, image: 1, chat: 2 };
   const rows = [...S.models].sort((a, c) => order[a.type] - order[c.type]);
+  // Where the balance sits: plan credits (this billing month), each top-up with its expiry date, free credits.
+  const w = b.user.wallet;
+  const walletPanel = () => {
+    if (!w) return null;
+    const line = (label, credits, note, cls = '') => h('div', { class: 'wl-row' + cls }, h('div', { class: 'grow' }, h('b', {}, label), h('small', {}, note)), h('div', { class: 'wl-n' }, fmtCredits(credits)));
+    const items = [];
+    if (w.sub) items.push(line('Plan credits', w.sub.credits, `This billing month. Expire on ${dateTxt(w.sub.expiresAt)} when your plan renews; no rollover.`));
+    w.packs.forEach((p, i) => items.push(line(p.kind === 'carry' ? 'Carried-over credits' : p.kind === 'promo' ? 'Bonus top-up credits' : 'Top-up credits', p.credits, p.expiresAt ? `${p.kind === 'carry' ? 'Paid credits from before the new rules' : `Bought ${dateTxt(p.boughtAt)}`}. Valid until ${dateTxt(p.expiresAt)}.${i === 0 && (w.packs.length > 1 || w.sub) ? ' Used next.' : ''}` : 'Paid credits from before the new rules. No expiry.')));
+    if (w.free > 0.005 || !items.length) items.push(line('Free credits', w.free, 'Chat, Image, Video Studio, Docs, Code and AI Apps. Not used by Pro tools.'));
+    return h('div', { class: 'wallet-panel', 'data-wallet': '' },
+      h('div', { class: 'wl-head' }, h('h2', {}, 'Your credits'), h('div', { class: 'wl-total' }, fmtCredits(b.user.credits), h('small', {}, ' credits'))),
+      items,
+      h('p', { class: 'wl-order' }, 'Scenly spends plan credits first, then top-ups with the soonest expiry, then free credits.', b.user.proPaused ? ' Pro tools are paused until you top up or your plan renews.' : ''));
+  };
   page.replaceChildren(...[
     h('h1', {}, 'Plans & credits'),
-    h('p', { class: 'sub' }, 'One balance for every model and app. Credits never expire. $1 buys 1,000 credits, and every model is priced at its official rate or less. The numbers on each card are rough guides; the exact cost is shown before you generate.'),
+    h('p', { class: 'sub' }, `$1 buys 1,000 credits, and every model is priced at its official rate or less. Monthly plan credits last one billing month; top-up packs last ${packDays} days. The numbers on each card are rough guides; the exact cost is shown before you generate.`),
     b.paymentMode === 'demo' && h('div', { class: 'notice' }, subs ? 'Payments are in demo mode: plans start, switch and renew without a card, and packs add credits at once. Add a Stripe key in .env to take real payments.' : 'Payments are in demo mode: purchases add credits instantly without charging a card. Add a Stripe key in .env to take real payments.'),
     planPanel(),
     subs && (bv.openInvoices || []).length ? h('div', { class: 'notice due-notice' }, `A payment of ${money(bv.openInvoices[0].amountUsd)} is waiting. `, h('a', { href: bv.openInvoices[0].url, target: '_blank', rel: 'noopener' }, 'Pay now')) : null,
+    walletPanel(),
     h('div', { class: 'stats' },
       h('div', { class: 'stat' }, h('small', {}, 'Balance'), h('div', {}, fmtCredits(b.user.credits) + ' credits')),
       h('div', { class: 'stat' }, h('small', {}, 'Used in last 30 days'), h('div', {}, fmtCredits(b.spent30) + ' credits')),
       h('div', { class: 'stat' }, h('small', {}, 'Current plan'), h('div', {}, subs && bv.trial ? 'Free trial' : planName(b.user.plan))),
     ),
     h('h2', {}, subs && onPaid ? 'Change plan' : 'Plans'),
-    subs && h('p', { class: 'sub' }, 'Monthly plans add their credits every month. Unused credits roll over. Cancel any time.'),
+    subs && h('p', { class: 'sub' }, 'Monthly plans add fresh credits on each billing date. Plan credits are valid for one month: unused credits expire when your plan renews and do not roll over. Plans include the Pro tools: Ad Studio, Video Builder, Video Agent and Studio Pro. Cancel any time.'),
     h('div', { class: 'cards' }, b.plans.map(planCard)),
-    h('h2', { id: 'packs' }, 'Credit packs'),
-    subs && h('p', { class: 'sub' }, 'One-time top-ups for any account. Pack credits never expire.'),
+    h('h2', { id: 'packs' }, 'Top-up packs'),
+    h('p', { class: 'sub' }, `One-time top-ups for any account, no subscription needed. Each pack is valid for ${packDays} days from purchase. Buy as many as you like, at any time, even before the last one runs out. Top-up credits also open the Pro tools while you have them. With a plan, your plan credits are used first.`),
     h('div', { class: 'cards' }, b.packs.map(packCard)),
     subs ? h('h2', { id: 'payments' }, 'Payment history') : null,
     subs ? (pays.length ? h('div', { class: 'table-wrap' }, h('table', { class: 't pay-table' },
@@ -3232,6 +3284,7 @@ async function renderBilling() {
       h('tbody', {}, b.ledger.slice(0, 100).map((l) => h('tr', {}, h('td', { style: { whiteSpace: 'nowrap', color: 'var(--muted)' } }, new Date(l.at).toLocaleString()), h('td', {}, l.desc), h('td', { class: 'num ' + (l.credits > 0 ? 'pos' : 'neg') }, (l.credits > 0 ? '+' : '−') + fmtCredits(Math.abs(l.credits))), h('td', { class: 'num' }, fmtCredits(l.balance))))),
     )) : h('div', { class: 'empty' }, 'No activity yet.'),
   ].filter((x) => x != null && x !== false)); // a bare false would show up as the word "false"
+  if (back === 'packs') $('#packs')?.scrollIntoView({ block: 'start' });
 }
 
 // Before a plan change: exactly what is paid today and what the plan will be from the next renewal.
@@ -3295,7 +3348,7 @@ function upgradePrompt() {
     } catch (e) { btn.disabled = false; toast(e.message, 'error'); }
   };
   const title = bv.trial ? 'Your free trial credits are used up' : paid ? `You have used this month's ${cur.name} credits` : 'You are out of credits';
-  const sub = bv.trial ? 'Pick a plan to keep going. Plans add fresh credits every month, and you can cancel any time.' : paid ? (bv.renewsAt ? `New credits arrive on ${new Date(bv.renewsAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}. Until then, add a credit pack or move to a bigger plan.` : 'Add a credit pack or move to a bigger plan to keep going.') : 'Pick a plan or a credit pack to keep going.';
+  const sub = bv.trial ? 'Pick a plan or a top-up pack to keep going. Plans add fresh credits every month; packs last 90 days with no subscription.' : paid ? (bv.renewsAt ? `New credits arrive on ${new Date(bv.renewsAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}. Until then, add a top-up pack or move to a bigger plan.` : 'Add a top-up pack or move to a bigger plan to keep going.') : 'Pick a plan or a top-up pack to keep going.';
   const bg = h('div', { class: 'modal-bg dlg upgrade-dlg', onmousedown: (e) => { if (e.target === bg) close(); } },
     h('div', { class: 'gate-box up-box' },
       h('button', { class: 'icon-btn gate-x', title: 'Close', onclick: close }, icon('x')),
@@ -3307,7 +3360,7 @@ function upgradePrompt() {
         return btn;
       })) : null,
       h('div', { class: 'up-foot' },
-        h('button', { class: 'btn', onclick: () => go('#/billing') }, paid ? 'Buy a credit pack' : 'Credit packs and all plans'),
+        h('button', { class: 'btn', onclick: () => go('#/billing/packs') }, paid ? 'Buy a top-up pack' : 'Top-up packs and all plans'),
         h('button', { class: 'btn ghost', onclick: close }, 'Not now'))));
   document.body.append(bg);
   return true;

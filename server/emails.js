@@ -5,7 +5,8 @@
 //   reset             "forgot password" link
 //   password_changed  security notice after a reset or a change in settings
 //   credits_added     receipt for every paid grant: credit pack, first plan payment, renewal, upgrade
-//   low_credits       balance fell under LOW_CREDIT_ALERT (default 200) credits; sent once until topped up
+//   low_credits       balance fell under LOW_CREDIT_ALERT (default 1,000) credits; sent once until topped up
+//   credits_expiring  top-up credits with a balance expire within 7 days (one email per pack)
 //   out_of_credits    balance is (nearly) zero or a job was refused for lack of credits; once until topped up
 //   plan_downgraded   moved to a smaller plan
 //   plan_cancel       cancellation scheduled (plan runs to the end of the month) or the cancellation was undone
@@ -91,9 +92,9 @@ export function build(kind, user, d = {}) {
       preheader: d.credits > 0 ? `Your ${fmtNum(d.credits)} free credits are ready.` : 'Your account is ready.',
       title: 'Your account is ready',
       paras: [`${hi} thanks for joining Scenly. Chat with the latest AI models, create images and videos, and work with your files, all in one place.`,
-        d.credits > 0 ? `We have added <b>${fmtNum(d.credits)} free credits</b> to your account so you can try everything.` : 'You can start right away.'],
+        d.credits > 0 ? `We have added <b>${fmtNum(d.credits)} free starter credits</b> to your account. Use them in Chat, Image, Video Studio, Docs, Code and AI Apps.` : 'You can start right away.'],
       cta: { label: 'Open Scenly', url: link('#/') },
-      after: ['When you need more, plans and credit packs are on the <a href="' + esc(link('#/billing')) + `" style="color:${BRAND.blue}">billing page</a>.`],
+      after: ['Want the Pro tools (Ad Studio, Video Builder, Video Agent and Studio Pro) or more credits? Monthly plans and top-up packs are on the <a href="' + esc(link('#/billing')) + `" style="color:${BRAND.blue}">billing page</a>.`],
       reason: ACCOUNT_REASON,
     }),
     reset: () => ({
@@ -123,8 +124,11 @@ export function build(kind, user, d = {}) {
         subject: d.kind === 'pack' || !d.planName ? `${fmtNum(d.credits)} credits added to your Scenly account` : `${title} · ${fmtNum(d.credits)} credits added`,
         preheader: `Payment received. New balance: ${fmtNum(d.balance)} credits.`,
         title,
-        paras: [`${hi} thanks for your payment. Your credits are ready to use${d.kind === 'cycle' || d.kind === 'create' || d.kind === 'plan' ? ' and unused credits roll over' : ''}.`],
-        details: [['Item', d.desc], ['Amount paid', d.amountUsd != null ? `US$${Number(d.amountUsd).toFixed(2)}` : null], ['Credits added', fmtNum(d.credits)], ['New balance', `${fmtNum(d.balance)} credits`], ['Date', fmtDate(Date.now())], d.renewsAt ? ['Next renewal', fmtDate(d.renewsAt)] : null],
+        paras: [`${hi} thanks for your payment. Your credits are ready to use, including the Pro tools.`,
+          d.kind === 'pack' ? `These top-up credits are valid for 90 days, until <b>${esc(fmtDate(d.expiresAt))}</b>. If you also have a monthly plan, your plan credits are used first.`
+          : d.kind === 'upgrade' ? 'These credits belong to this billing month and expire with the rest of your plan credits when your plan renews.'
+          : `Plan credits are valid for one billing month${d.expiresAt ? `, until <b>${esc(fmtDate(d.expiresAt))}</b>` : ''}. Unused plan credits expire when your plan renews and do not roll over.`],
+        details: [['Item', d.desc], ['Amount paid', d.amountUsd != null ? `US$${Number(d.amountUsd).toFixed(2)}` : null], ['Credits added', fmtNum(d.credits)], d.expiresAt ? ['Valid until', fmtDate(d.expiresAt)] : null, ['New balance', `${fmtNum(d.balance)} credits`], ['Date', fmtDate(Date.now())], d.renewsAt ? ['Next renewal', fmtDate(d.renewsAt)] : null],
         cta: { label: 'Start creating', url: link('#/') },
         after: [`Invoices and receipts are on your <a href="${esc(link('#/billing'))}" style="color:${BRAND.blue}">billing page</a>.`],
         reason: ACCOUNT_REASON,
@@ -134,8 +138,8 @@ export function build(kind, user, d = {}) {
       subject: `You have ${fmtNum(d.balance)} Scenly credits left`,
       preheader: 'Top up or pick a plan so your next creation does not stop halfway.',
       title: 'Your credits are running low',
-      paras: [`${hi} your balance is down to <b>${fmtNum(d.balance)} credits</b>. Image and video generation stop when credits run out, so now is a good time to top up.`,
-        user.plan && user.plan !== 'free' ? 'Credit packs never expire and stack on top of your plan.' : 'Plans add fresh credits every month and unused credits roll over.'],
+      paras: [`${hi} your balance is down to <b>${fmtNum(d.balance)} credits</b>. Image and video generation stop when credits run out, and the Pro tools pause at zero, so now is a good time to top up.`,
+        user.plan && user.plan !== 'free' ? 'Top-up packs work alongside your plan and stay valid for 90 days. You can buy as many as you like, at any time; your plan credits are always used first.' : 'Top-up packs are valid for 90 days with no subscription needed, or pick a monthly plan for fresh credits every month.'],
       cta: { label: 'Get more credits', url: link('#/billing') },
       reason: ACCOUNT_REASON,
     }),
@@ -144,16 +148,29 @@ export function build(kind, user, d = {}) {
       preheader: 'Add credits to keep creating.',
       title: 'You are out of credits',
       paras: [`${hi} your Scenly balance is <b>${fmtNum(d.balance)} credits</b>, which is not enough for new chats, images or videos.`,
-        'Your work is safe. Add a credit pack or choose a plan and you can pick up right where you left off.'],
+        'Your work is safe. Add a top-up pack or choose a plan and you can pick up right where you left off. Pro tools (Ad Studio, Video Builder, Video Agent and Studio Pro) are paused until then.'],
       cta: { label: 'Add credits', url: link('#/billing') },
       reason: ACCOUNT_REASON,
     }),
+    credits_expiring: () => {
+      const n = (d.packs || []).reduce((t, p) => t + p.credits, 0), first = (d.packs || [])[0];
+      return {
+        subject: `${fmtNum(Math.floor(n))} Scenly top-up credits expire ${first ? 'on ' + fmtDate(first.expiresAt) : 'soon'}`,
+        preheader: 'Use them before they expire.',
+        title: 'Your top-up credits expire soon',
+        paras: [`${hi} top-up credits are valid for 90 days from purchase. Some of yours expire within the next week:`],
+        details: (d.packs || []).map((p) => [`Expires ${fmtDate(p.expiresAt)}`, `${fmtNum(Math.floor(p.credits))} credits`]),
+        after: ['Scenly always spends your monthly plan credits first, then the top-up credits that expire soonest.'],
+        cta: { label: 'Use my credits', url: link('#/') },
+        reason: ACCOUNT_REASON,
+      };
+    },
     plan_downgraded: () => ({
       subject: `Your Scenly plan is changing to ${d.toName}`,
       preheader: `From your next renewal you pay US$${d.toPrice} a month.`,
       title: `You moved to ${d.toName}`,
       paras: [`${hi} your plan has changed from ${esc(d.fromName)} to <b>${esc(d.toName)}</b>.`,
-        `From your next renewal${d.renewsAt ? ' on ' + esc(fmtDate(d.renewsAt)) : ''} you pay US$${d.toPrice} a month and get ${fmtNum(d.toCredits)} credits each month. Credits you already have stay in your account.`],
+        `From your next renewal${d.renewsAt ? ' on ' + esc(fmtDate(d.renewsAt)) : ''} you pay US$${d.toPrice} a month and get ${fmtNum(d.toCredits)} credits each month. Your current plan credits stay until then; any left at renewal expire. Top-up credits are not affected.`],
       cta: { label: 'Manage your plan', url: link('#/billing') },
       reason: ACCOUNT_REASON,
     }),
@@ -169,16 +186,16 @@ export function build(kind, user, d = {}) {
       preheader: d.endsAt ? `You keep ${d.planName} until ${fmtDate(d.endsAt)}.` : 'Your plan will not renew.',
       title: 'Your plan has been cancelled',
       paras: [`${hi} we have cancelled your ${esc(d.planName)} plan as asked. You keep everything in ${esc(d.planName)}${d.endsAt ? ' until <b>' + esc(fmtDate(d.endsAt)) + '</b>' : ' until the end of this billing month'}, and you will not be charged again.`,
-        'Your credits stay in your account after the plan ends. Changed your mind? You can keep your plan with one click.'],
+        'Plan credits can be used until the plan ends and expire then. Top-up credits stay valid for 90 days from purchase. Changed your mind? You can keep your plan with one click.'],
       cta: { label: 'Keep my plan', url: link('#/billing') },
       reason: ACCOUNT_REASON,
     }),
     plan_ended: () => ({
       subject: `Your Scenly ${d.fromName} plan has ended`,
-      preheader: 'Your account is now on Free. Your credits are still there.',
+      preheader: 'Your account is now on Free. Your work is still there.',
       title: 'Your plan has ended',
       paras: [`${hi} your ${esc(d.fromName)} plan has ended and your account is now on Free.`,
-        `Your remaining <b>${fmtNum(user.credits)} credits</b> and all your work are still here. You can pick a plan again at any time.`],
+        `Unused plan credits expired with the plan. ${user.credits > 0.5 ? `You still have <b>${fmtNum(Math.floor(user.credits))} credits</b> (top-up or free credits) and` : 'All'} your work is still here. You can pick a plan or buy a top-up pack at any time.`],
       cta: { label: 'See plans', url: link('#/billing') },
       reason: ACCOUNT_REASON,
     }),
@@ -213,14 +230,19 @@ export function notify(kind, user, d = {}) {
 
 // ---------- triggers used by credits and billing ----------
 const OUT_AT = 10; // under one US cent of credits counts as none left
-const lowAt = () => Number(process.env.LOW_CREDIT_ALERT ?? 200);
+export const LOW_CREDIT_AT = () => { const v = Number(process.env.LOW_CREDIT_ALERT ?? 1000); return Number.isFinite(v) && v >= 0 ? v : 1000; };
+// Accounts with only free starter credits get the warning later (at 200), so a new account is not told its
+// balance is low right after its first chat.
+const paidLeft = (u) => (u.plan && u.plan !== 'free') || (!!u.wallet?.sub && !u.wallet.sub.expired && u.wallet.sub.credits > 0) || (u.wallet?.packs || []).some((p) => !p.expired && p.credits > 0);
+export const lowAtFor = (u) => (u && !paidLeft(u) ? Math.min(LOW_CREDIT_AT(), 200) : LOW_CREDIT_AT());
 const rank = { low: 1, out: 2 };
 
 /** After credits change: warn once when the balance gets low or runs out, and re-arm after a top-up. */
 export function checkBalance(user, { refused = false, rearmOnly = false } = {}) {
   if (!user) return;
   const bal = Number(user.credits || 0);
-  const level = bal < OUT_AT || (refused && bal < lowAt()) ? 'out' : bal < lowAt() ? 'low' : null;
+  const lowAt = lowAtFor(user);
+  const level = bal < OUT_AT || (refused && bal < lowAt) ? 'out' : bal < lowAt ? 'low' : null;
   if (!level) { if (user.creditAlert) delete user.creditAlert; return; }
   if (rearmOnly) return; // credits going in never trigger a warning
   if ((rank[user.creditAlert] || 0) >= rank[level]) return;
@@ -229,17 +251,20 @@ export function checkBalance(user, { refused = false, rearmOnly = false } = {}) 
 }
 
 /** Receipt for a paid grant. Works out what was bought from the payment record. */
-export function purchaseReceipt(user, credits, desc, paymentId) {
+export function purchaseReceipt(user, credits, desc, paymentId, expiresAt) {
   const pay = paymentId && db.payments.find((p) => p.id === paymentId);
   const plan = planOf(pay?.offerId);
   const kind = pay?.kind === 'subscription'
     ? ({ subscription_create: 'create', subscription_cycle: 'cycle', subscription_update: 'upgrade' }[pay.reason] || 'pack')
     : plan ? 'plan' : 'pack';
   notify('credits_added', user, {
-    kind, planName: plan?.name, desc, credits, balance: user.credits, amountUsd: pay?.amountUsd,
+    kind, planName: plan?.name, desc, credits, balance: user.credits, amountUsd: pay?.amountUsd, expiresAt,
     renewsAt: kind !== 'pack' && kind !== 'upgrade' ? user.sub?.currentPeriodEnd || user.planRenewsAt : null,
   });
 }
+
+/** Top-up credits that expire within a week. */
+export function creditsExpiring(user, packs) { if (packs?.length) notify('credits_expiring', user, { packs }); }
 
 /** Plan changes recorded by notePlan. Upgrades and new plans are covered by their payment receipt. */
 export function planChanged(user, from, to, kind) {

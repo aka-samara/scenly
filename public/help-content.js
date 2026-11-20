@@ -15,7 +15,7 @@ export const CATS = [
 const go = (href, label) => `<a class="hp-go" href="${href}">${label} →</a>`;
 const note = (t) => `<div class="hp-note">${t}</div>`;
 const tip = (t) => `<div class="hp-tip"><b>Tip</b> ${t}</div>`;
-const paidNote = (name) => note(`<b>${name} is part of the paid plans</b> (Pro, Max and Ultra). On the Free plan the page shows the plans instead. Credit packs on their own do not open it. See <a href="#/help/paid-tools">Paid-only tools</a>.`);
+const paidNote = (name) => note(`<b>${name} is a Pro tool.</b> It opens with a monthly plan (Pro, Max or Ultra) or any top-up pack, and runs on plan and top-up credits. Free starter credits do not open it. See <a href="#/help/paid-tools">Pro tools</a>.`);
 
 export const ARTICLES = [
   // ---------------------------------------------------------------- Getting started
@@ -37,7 +37,7 @@ export const ARTICLES = [
 </ul>
 <h2 id="first">Your first five minutes</h2>
 <ol>
-<li>Create a free account. You get 1,000 welcome credits and no card is needed.</li>
+<li>Create a free account. You get 1,000 free starter credits for Chat, Image, Video Studio, Docs, Code and AI Apps, and no card is needed.</li>
 <li>Open <b>Chat</b> and ask anything, or open <b>Image</b> and describe a picture.</li>
 <li>Look at the price on the <b>Generate</b> button before you press it. That is roughly what it will cost.</li>
 <li>Find everything you made later in <b>Assets</b> and in <b>Recents</b> in the sidebar.</li>
@@ -147,28 +147,61 @@ ${go('#/help/account', 'Change your password or add one')}`,
 <h2 id="refunds">Failed work is refunded</h2>
 <p>If a picture, video or app run fails, the credits are returned automatically. Failed requests are never charged. You can see every charge and refund in your credit history on the <a href="#/billing">Plans &amp; credits</a> page.</p>
 <h2 id="low">Running low</h2>
-<p>When you do not have enough credits, Scenly says so and offers plans and credit packs. When email is switched on you also get an email when your balance runs low and when it reaches zero.</p>
+<p>When your balance runs low, a notice appears at the top of the page and you get an email. When you do not have enough credits, Scenly says so and offers plans and top-up packs. See <a href="#/help/credit-validity">When credits expire</a>.</p>
 ${go('#/billing', 'See your balance and history')}`,
   },
   {
-    id: 'plans', cat: 'credits', title: 'Plans and credit packs',
-    sum: 'Free, Pro, Max and Ultra, plus one-time credit packs.',
+    id: 'credit-validity', cat: 'credits', title: 'When credits expire, and which are used first',
+    sum: 'Plan credits last one month, top-ups 90 days. Plan credits are always used first.',
+    kw: 'expire expiry valid validity rollover roll over carry month 90 days top up pack which first order free starter pro tools pause low balance',
+    body: `
+<table class="hp-table">
+<thead><tr><th>Credits</th><th>Valid for</th><th>Works in</th></tr></thead>
+<tbody>
+<tr><td><b>Monthly plan credits</b></td><td>1 month, from your billing date to the next</td><td>Every tool, including the Pro tools</td></tr>
+<tr><td><b>Top-up pack credits</b></td><td>90 days from the purchase date</td><td>Every tool, including the Pro tools</td></tr>
+<tr><td><b>Free starter credits</b> (1,000 on sign-up)</td><td>No end date</td><td>Chat, Image, Video Studio, Docs, Code and AI Apps</td></tr>
+</tbody></table>
+<h2 id="monthly">Monthly subscription credits: valid for 1 month</h2>
+<p>Your plan's credits are good for one month from your billing date. Any unused plan credits expire when your plan renews, and the new month's credits take their place. Plan credits do not roll over. If you cancel, you can use them until the plan ends.</p>
+<h2 id="topups">One-time top-up credits: valid for 90 days</h2>
+<p>Every top-up pack you buy stays valid for 90 days from the purchase date. No monthly subscription is needed. You can buy as many packs as you like, at any time, even before your last pack runs out; each pack keeps its own 90 days. A week before a pack expires with credits left, Scenly sends you a reminder email.</p>
+<h2 id="pro">Pro Studio access: active until your credits run out</h2>
+<p>Monthly subscribers and top-up buyers both get full access to the Pro tools: <a href="#/help/ad-studio">Ad Studio</a>, <a href="#/help/video-builder">Video Builder</a>, <a href="#/help/video-agent">Video Agent</a> and <a href="#/help/studio-pro">Studio Pro</a>, for as long as you have paid credits left or an active plan. The Pro tools spend plan and top-up credits only. When your paid credits hit zero, the Pro tools pause until you top up or your plan renews. Your projects stay safe while they are paused.</p>
+<h2 id="free">Free starter credits</h2>
+<p>New accounts get 1,000 free credits to use on the standard tools: Chat, Image, Video Studio, Docs, Code and AI Apps. They do not open or pay for the Pro tools.</p>
+<h2 id="order">Which credits are used first?</h2>
+<p>If you have both plan credits and top-up credits, Scenly always uses your monthly plan credits first, so your top-ups are saved for later. Top-ups are then used in order of expiry date, the soonest first. Free starter credits are used last.</p>
+<h2 id="refund">Refunds</h2>
+<p>When a picture, video or app run fails, the credits go back to where they came from. If that pack or plan month has expired in the meantime, the credits come back as a new top-up valid for 90 days.</p>
+<h2 id="low">Low balance</h2>
+<p>When your balance runs low, a notice appears at the top of every page and Scenly emails you (once, until you top up). You get another email if you run out.</p>
+<h2 id="see">Where to see it</h2>
+<p>The <a href="#/billing">Plans &amp; credits</a> page shows your plan credits and when they expire, each top-up with its expiry date, and your free credits. Your credit history lists every charge, refund and expiry.</p>
+<h2 id="before">Credits from before these rules</h2>
+<p>Credits you already had when these rules started on 20 November 2026 were all kept. Credits you paid for show as <b>Carried-over credits</b> and count as paid credits, and free credits stay free credits.</p>
+${go('#/billing', 'See your credits')}`,
+  },
+  {
+    id: 'plans', cat: 'credits', title: 'Plans and top-up packs',
+    sum: 'Free, Pro, Max and Ultra, plus one-time top-up packs valid for 90 days.',
     kw: 'plan pricing free pro max ultra pack top up subscription monthly price cost buy',
     body: `
 <h2 id="plans">Plans</h2>
 <table class="hp-table">
 <thead><tr><th>Plan</th><th>Price</th><th>Credits</th></tr></thead>
 <tbody>
-<tr><td><b>Free</b></td><td>$0</td><td>1,000 welcome credits, once</td></tr>
+<tr><td><b>Free</b></td><td>$0</td><td>1,000 free starter credits, once</td></tr>
 <tr><td><b>Pro</b></td><td>$20 a month</td><td>20,000 every month</td></tr>
 <tr><td><b>Max</b> (most popular)</td><td>$100 a month</td><td>100,000 every month</td></tr>
 <tr><td><b>Ultra</b></td><td>$200 a month</td><td>200,000 every month</td></tr>
 </tbody></table>
 <ul>
 <li><b>Free</b> lets you try every model: chat, documents, Code, pictures and editing, Video Studio and the AI apps. You get 2 styles in each Design Library group.</li>
-<li><b>Pro, Max and Ultra</b> add Video Agent, Video Builder, Studio Pro and Ad Studio, and unlock every style. Unused monthly credits roll over.</li>
+<li><b>Pro, Max and Ultra</b> add Video Agent, Video Builder, Studio Pro and Ad Studio, and unlock every style.</li>
+<li>Plan credits are valid for one month from your billing date. Unused plan credits expire when your plan renews and <b>do not roll over</b>.</li>
 </ul>
-<h2 id="packs">Credit packs</h2>
+<h2 id="packs">Top-up packs</h2>
 <table class="hp-table">
 <thead><tr><th>Pack</th><th>Price</th></tr></thead>
 <tbody>
@@ -176,26 +209,26 @@ ${go('#/billing', 'See your balance and history')}`,
 <tr><td>25,000 credits</td><td>$25</td></tr>
 <tr><td>50,000 credits</td><td>$50</td></tr>
 </tbody></table>
-<p>Packs are one-time top-ups for any account and <b>never expire</b>. Any pack unlocks the full Design Library. A pack does not open the paid-only studios; those need a monthly plan.</p>
+<p>Packs are one-time top-ups for any account, with no subscription needed. Each pack is <b>valid for 90 days</b> from the purchase date. You can buy several, at any time, even before the last one runs out. While you have top-up credits, the Pro tools are open too, and any pack unlocks the full Design Library. With a plan, your plan credits are used first. See <a href="#/help/credit-validity">When credits expire</a>.</p>
 <p>All plans and packs sell credits at face value: $1 buys 1,000 credits, with no bonus credits.</p>
 ${go('#/billing', 'Compare plans')}`,
   },
   {
-    id: 'paid-tools', cat: 'credits', title: 'Paid-only tools',
-    sum: 'Video Agent, Video Builder, Studio Pro and Ad Studio need a monthly plan.',
+    id: 'paid-tools', cat: 'credits', title: 'Pro tools',
+    sum: 'Video Agent, Video Builder, Studio Pro and Ad Studio open with a plan or a top-up pack.',
     kw: 'locked paid only pro plan upgrade video agent builder studio pro ad studio free trial',
     body: `
-<p>Four studios are part of the monthly plans (Pro, Max and Ultra):</p>
+<p>Four studios are Pro tools. They open with a monthly plan (Pro, Max or Ultra) <b>or</b> any top-up pack, and stay open for as long as you have paid credits left or an active plan:</p>
 <ul>
 <li><a href="#/help/video-agent">Video Agent</a>: describe a video and get a full storyboard.</li>
 <li><a href="#/help/video-builder">Video Builder</a>: build videos up to 5 minutes from scenes, with music, voice-over and captions.</li>
 <li><a href="#/help/studio-pro">Studio Pro</a>: a guided picture and video studio that plans the shots for you.</li>
 <li><a href="#/help/ad-studio">Ad Studio</a>: turn your website into a brand kit, then into picture and video ads.</li>
 </ul>
-<p>On the Free plan these show a small <b>Pro</b> tag in the sidebar. Opening one shows the plans instead. Credit packs alone do not open them.</p>
-<p>Everything else stays open on the Free plan, limited only by your credits: chat, pictures, Video Studio, documents, Code and the AI apps.</p>
-<p>Using these studios still spends credits. The plan opens them; your credits pay for what they make.</p>
-${go('#/billing', 'See plans')}`,
+<p>Without a plan or top-up credits these show a small <b>Pro</b> tag in the sidebar, and opening one shows the plans and packs instead. The 1,000 free starter credits do not open them.</p>
+<p>The Pro tools spend plan and top-up credits only. When those hit zero, the Pro tools pause until you top up or your plan renews. Your projects stay safe.</p>
+<p>Everything else is open to every account, limited only by your credits: Chat, Image, Video Studio, Docs, Code and AI Apps.</p>
+${go('#/billing', 'See plans and packs')}`,
   },
   {
     id: 'billing', cat: 'credits', title: 'Billing: upgrade, switch, cancel',
@@ -208,15 +241,15 @@ ${go('#/billing', 'See plans')}`,
 <h2 id="upgrade">Upgrade</h2>
 <p>Pick a bigger plan and confirm. You pay the difference for the rest of this month now, and get the matching share of the extra credits now. Your renewal date stays the same.</p>
 <h2 id="switch">Move to a smaller plan</h2>
-<p>Pick a smaller plan and confirm. The new price starts at your next renewal. There is no refund for the current month, and you keep all your credits.</p>
+<p>Pick a smaller plan and confirm. The new price and credits start at your next renewal. There is no refund for the current month, and you keep this month's plan credits until then.</p>
 <h2 id="cancel">Cancel</h2>
-<p>Press <b>Cancel plan</b>. Your plan stays until the end of the period you paid for, and your credits stay after that. You will not be charged again. Changed your mind? Press <b>Keep my plan</b> before the end date.</p>
+<p>Press <b>Cancel plan</b>. Your plan and its credits stay until the end of the period you paid for; unused plan credits expire then. Top-up credits keep their own 90-day dates. You will not be charged again. Changed your mind? Press <b>Keep my plan</b> before the end date.</p>
 <h2 id="manage">Card, invoices and address</h2>
 <p>Press <b>Manage billing</b> to open the secure billing page, where you change your card, see invoices and update your billing address or tax details.</p>
 <h2 id="failed">A payment did not go through</h2>
 <p>The page says so and shows the amount waiting. Update your card in <b>Manage billing</b> to keep your plan.</p>
 <h2 id="emails">Emails about billing</h2>
-<p>When email is switched on, Scenly sends a receipt when credits are added, and emails when a plan is cancelled, ends, moves to a smaller plan, or a payment fails.</p>
+<p>Scenly sends a receipt when credits are added (with their expiry date), and emails when your balance runs low or runs out, when top-up credits expire within a week, and when a plan is cancelled, ends, moves to a smaller plan, or a payment fails.</p>
 ${go('#/billing', 'Open Plans & credits')}`,
   },
 
@@ -692,15 +725,15 @@ ${note('Your browser asks for permission to use the microphone the first time. I
     kw: 'problem error fix not working failed stuck slow credits email microphone upload website refused locked',
     body: `
 <h2 id="credits">"Not enough credits"</h2>
-<p>The action needs more credits than you have. Press <b>Get credits</b> in the message, or open <a href="#/billing">Plans &amp; credits</a> and buy a pack or start a plan. On a plan, new credits arrive on your renewal date.</p>
+<p>The action needs more credits than you have. Press <b>Get credits</b> in the message, or open <a href="#/billing">Plans &amp; credits</a> and buy a top-up pack or start a plan. On a plan, new credits arrive on your renewal date. In a Pro tool, only plan and top-up credits count; free starter credits work in the standard tools.</p>
 <h2 id="failed">A picture, video or app run failed</h2>
 <p>Your credits were returned automatically. Try again, maybe with a different model or a simpler prompt. Some models refuse certain content or pictures; another model may accept it.</p>
 <h2 id="slow">My video is taking a long time</h2>
 <p>Videos usually take 1 to 5 minutes, longer at high resolution or length. You can leave the page; it keeps going and you get a message when it is ready. Find it in Recents and Assets.</p>
 <h2 id="locked">A studio shows the plans instead of opening</h2>
-<p>Video Agent, Video Builder, Studio Pro and Ad Studio need a monthly plan. A credit pack alone does not open them. See <a href="#/help/paid-tools">Paid-only tools</a>.</p>
+<p>Video Agent, Video Builder, Studio Pro and Ad Studio need a monthly plan or top-up credits. If you had them and they show as paused, your paid credits have run out: top up, or wait for your plan to renew. See <a href="#/help/paid-tools">Pro tools</a>.</p>
 <h2 id="style">A style has a lock</h2>
-<p>The Free plan includes 2 looks in each Design Library group. Any paid plan or credit pack unlocks all of them.</p>
+<p>The Free plan includes 2 looks in each Design Library group. Any paid plan or top-up pack unlocks all of them.</p>
 <h2 id="picture-video">My own picture will not start a video</h2>
 <p>Video models can only start from a picture with a public web address. Scenly takes care of this where it can. If a message says the picture could not be used, try the <b>Animate</b> button on a picture made in Scenly, or describe the scene in words instead.</p>
 <h2 id="email">The confirmation or reset email has not arrived</h2>
@@ -722,17 +755,21 @@ ${note('Your browser asks for permission to use the microphone the first time. I
     kw: 'faq questions expire roll over refund cancel models which ai privacy watermark free',
     body: `
 <h2 id="expire">Do credits expire?</h2>
-<p>Credit pack credits never expire. Unused monthly plan credits roll over. If you cancel, you keep your credits.</p>
+<p>Yes. Monthly plan credits are valid for one month and expire when your plan renews; they do not roll over. Top-up pack credits are valid for 90 days from purchase. Free starter credits have no end date. See <a href="#/help/credit-validity">When credits expire</a>.</p>
+<h2 id="order">Which credits are used first?</h2>
+<p>Monthly plan credits first, so your top-ups are saved for later. Then top-ups, the soonest to expire first, then free credits.</p>
+<h2 id="several-packs">Can I buy more than one top-up pack?</h2>
+<p>Yes, as many as you like and at any time, even before your current pack runs out. Each pack is valid for 90 days from its own purchase date.</p>
 <h2 id="cost">How much is a credit?</h2>
-<p>1 credit is $0.001, so $1 buys 1,000 credits. The Free plan's 1,000 welcome credits are worth $1 of use.</p>
+<p>1 credit is $0.001, so $1 buys 1,000 credits. The 1,000 free starter credits are worth $1 of use on the standard tools.</p>
 <h2 id="charged-fail">Am I charged when something fails?</h2>
 <p>No. Failed pictures, videos and app runs are refunded, and failed requests are never charged.</p>
 <h2 id="free">What can I do on the Free plan?</h2>
-<p>Chat, documents, Code, pictures and editing, Video Studio and the AI apps, paid from your credits. Video Agent, Video Builder, Studio Pro and Ad Studio need a monthly plan.</p>
+<p>Chat, Docs, Code, pictures and editing, Video Studio and the AI apps, paid from your 1,000 free starter credits. Video Agent, Video Builder, Studio Pro and Ad Studio need a monthly plan or a top-up pack.</p>
 <h2 id="models">Which AI models can I use?</h2>
 <p>More than 30 chat models from makers such as Anthropic, OpenAI, Google, DeepSeek, Qwen, Kimi, GLM and xAI, plus picture models (Seedream, GPT Image, Nano Banana) and the Seedance video models. Each model menu lists what is available today with its price.</p>
 <h2 id="cancel">Can I cancel any time?</h2>
-<p>Yes. Your plan stays until the end of the period you paid for and you are not charged again. See <a href="#/help/billing">Billing</a>.</p>
+<p>Yes. Your plan stays until the end of the period you paid for and you are not charged again. Unused plan credits expire when the plan ends; top-up credits keep their own dates. See <a href="#/help/billing">Billing</a>.</p>
 <h2 id="where">Where is the thing I made?</h2>
 <p>In <a href="#/help/assets-recents">Assets</a> (every picture, video and sound) and in Recents in the sidebar.</p>
 <h2 id="voice">Can Scenly speak a voice-over for me?</h2>

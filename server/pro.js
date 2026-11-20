@@ -8,7 +8,7 @@ import net from 'node:net';
 import db, { save, id, now } from './db.js';
 import { flags } from './flags.js';
 import { getCatalog, findModel, paidUsd } from './catalog.js';
-import { charge, usdToCredits, round2 } from './credits.js';
+import { charge, usdToCredits, round2, needCredits } from './credits.js';
 import { complete, callJson } from './gateway.js';
 import { UserError, saveMedia, mediaRef, imageSize, sizeForShape, pictureLink, publicBase, signFile } from './generate.js';
 import { getFiles, filePath, dataUrl, fileMeta, storeImage } from './files.js';
@@ -198,7 +198,7 @@ export function mountPro(app, { requireUser, wrap, createGeneration, studioSessi
   // ---------- the agent's planner: one brief in, one production plan out ----------
   app.post('/api/pro/agent/plan', requireUser, gate, wrap(async (req, res) => {
     const prompt = text(req.body.prompt, 3000); if (prompt.length < 3) throw new UserError('Describe what you want to make in a sentence.');
-    if (!((req.user.credits || 0) > 0)) throw new UserError('You are out of credits. Top up to plan and create.', 402, 'insufficient_credits');
+    needCredits(req.user, 0, 'You are out of credits. Top up to plan and create.');
     const kind = KINDS.some((k) => k.id === req.body.kind) ? req.body.kind : 'auto';
     const ratio = RATIOS.includes(req.body.ratio) ? req.body.ratio : 'auto';
     const seconds = Number(req.body.seconds) > 0 ? Math.min(180, Math.round(Number(req.body.seconds))) : 0;
@@ -270,7 +270,7 @@ export function mountPro(app, { requireUser, wrap, createGeneration, studioSessi
     const shape = ['9:16', '16:9', '4:3', '3:4', '1:1'].includes(req.body.ratio) ? req.body.ratio : '1:1';
     let err = null;
     for (const model of order) {
-      if (user.credits < model.price.creditsPerImage * 1.5) throw new UserError(`Not enough credits. This needs about ${Math.ceil(model.price.creditsPerImage * 1.5)} credits.`, 402, 'insufficient_credits');
+      needCredits(user, model.price.creditsPerImage * 1.5);
       try {
         const body = { model: model.id, prompt: face ? `${face.lead}\n\n${prompt}` : prompt, size: sizeForShape(model, shape) || model.image.sizes[0], response_format: 'url', n: 1, watermark: false }; // without this Seedream stamps "AI generated" in a corner
         if (refs.length) body.image = await Promise.all(refs.slice(0, model.image.edit?.max_images || 1).map(smallRef));
@@ -376,7 +376,7 @@ export function mountPro(app, { requireUser, wrap, createGeneration, studioSessi
   // The site is opened in a real browser (server/pro-site.js); if that cannot start or the site will not open in it, the plain
   // download above is used instead. Then one writing request builds the kit, and the logo and product pictures are saved.
   async function kitFromSite(user, link) {
-    if (!((user.credits || 0) > 0)) throw new UserError('You are out of credits. Top up to read a website.', 402, 'insufficient_credits');
+    needCredits(user, 0, 'You are out of credits. Top up to read a website.');
     const chat = await planner(false); if (!chat) throw new UserError('No writing model is available right now. Please try again later.', 503);
     let site = null; let how = 'browser';
     try { site = await browseSite(link); } catch (e) { if (!e.user) console.warn('[pro] browser read failed, using the plain download:', e.message); how = 'plain'; try { const s = await readSite(link); site = { url: s.url, title: s.title, description: s.description, colors: s.colors, neutrals: [], fonts: [], pages: [{ kind: 'home', url: s.url, title: s.title, headings: [], text: s.text }], logos: [], svgLogo: '', icon: '', ogImage: '', pictures: [] }; } catch (e2) { throw e.user ? new UserError(e.message, 400, 'bad_link') : e2; } }
@@ -430,7 +430,7 @@ export function mountPro(app, { requireUser, wrap, createGeneration, studioSessi
   // Ad concepts: one request writes every ad (headline, supporting line, call to action and the picture to make).
   app.post('/api/pro/brands/:id/concepts', requireUser, gate, wrap(async (req, res) => {
     const b = brandOf(req); const k = b.kit; const chat = await planner(false); if (!chat) throw new UserError('No writing model is available right now. Please try again later.', 503);
-    if (!((req.user.credits || 0) > 0)) throw new UserError('You are out of credits. Top up to make ads.', 402, 'insufficient_credits');
+    needCredits(req.user, 0, 'You are out of credits. Top up to make ads.');
     const products = (Array.isArray(req.body.products) ? req.body.products : []).map((x) => text(x, 80)).filter(Boolean).slice(0, 6);
     const per = Math.max(1, Math.min(4, Number(req.body.per) || 1)); const total = Math.min(8, Math.max(1, (products.length || 1) * per));
     const video = req.body.format === 'video';

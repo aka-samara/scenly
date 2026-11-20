@@ -431,7 +431,7 @@ async function previewFrames(sceneIds) {
     };
     if (d.count === 1 && sceneIds) return await run();
     const video = r2(list.reduce((n, s) => n + priceOf(s), 0));
-    confirmBox(`Preview ${d.count} scene${d.count === 1 ? '' : 's'} as pictures?`, `${d.model} draws one still picture for each scene. This costs about ${fmtCredits(d.total)} credits (${fmtCredits(d.per)} each). Making the same scenes as video costs about ${fmtCredits(video)} credits, so this is a cheap way to check the look first. Each picture becomes the start picture of its scene, and Generate then animates from it.${list.some((s) => s.continuity) ? ' Scenes that continue from the scene before will start from their own picture instead.' : ''} A picture that fails is not charged. You have ${fmtCredits(S.user.credits)} credits.`, `Preview · ≈ ${fmtCredits(d.total)} credits`, run);
+    confirmBox(`Preview ${d.count} scene${d.count === 1 ? '' : 's'} as pictures?`, `${d.model} draws one still picture for each scene. This costs about ${fmtCredits(d.total)} credits (${fmtCredits(d.per)} each). Making the same scenes as video costs about ${fmtCredits(video)} credits, so this is a cheap way to check the look first. Each picture becomes the start picture of its scene, and Generate then animates from it.${list.some((s) => s.continuity) ? ' Scenes that continue from the scene before will start from their own picture instead.' : ''} A picture that fails is not charged. You have ${fmtCredits(S.user.wallet ? S.user.wallet.paid : S.user.credits)} plan and top-up credits.`, `Preview · ≈ ${fmtCredits(d.total)} credits`, run);
   } catch (e) { errToast(e); }
 }
 async function generate(sceneIds) {
@@ -446,7 +446,7 @@ async function generate(sceneIds) {
     toast(`${r.data.started} scene${r.data.started === 1 ? ' is' : 's are'} being made. You can keep working or close this tab.`);
   };
   if (list.length === 1) return run().catch(errToast);
-  confirmBox(`Generate ${list.length} scenes?`, `This costs about ${fmtCredits(total)} credits. You have ${fmtCredits(S.user.credits)}. Each scene is charged only when it succeeds, and a scene that fails is refunded automatically.`, `Generate · ≈ ${fmtCredits(total)} credits`, run);
+  confirmBox(`Generate ${list.length} scenes?`, `This costs about ${fmtCredits(total)} credits. You have ${fmtCredits(S.user.wallet ? S.user.wallet.paid : S.user.credits)}. Each scene is charged only when it succeeds, and a scene that fails is refunded automatically.`, `Generate · ≈ ${fmtCredits(total)} credits`, run);
 }
 async function stopScene(s) { const r = await call('POST', `/api/builder/projects/${B.id}/scenes/${s.id}/stop`); if (r.ok) { B.pollOnce = true; schedulePoll(300); toast('Stopping. Credits held for this scene are returned.'); } }
 

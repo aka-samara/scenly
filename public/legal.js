@@ -3,7 +3,7 @@
 // "## " is a sub-heading, and anything else is a paragraph. Keep LEGAL_UPDATED in step with real changes.
 export const LEGAL_COMPANY = 'ADXL PTY LTD';
 export const LEGAL_PLACE = 'Victoria, Australia';
-export const LEGAL_UPDATED = '19 November 2026';
+export const LEGAL_UPDATED = '20 November 2026';
 export const COPYRIGHT = `© 2026 ${LEGAL_COMPANY}. All rights reserved.`;
 
 export const TERMS = {
@@ -38,14 +38,18 @@ export const TERMS = {
       'You must give accurate information when you sign up and keep it up to date. You are responsible for keeping your password secure and for all activity on your account, except where the law says otherwise.',
       'Tell us promptly if you believe your account has been accessed without your permission. We may ask you to verify your identity, email address or payment details.',
       'Accounts are personal. You must not share, sell or transfer your account, or create multiple accounts to obtain additional free credits or to avoid limits or a suspension.'],
-    ['Free trial and welcome credits',
-      'New accounts may receive a free trial in the form of welcome credits. The amount, availability and conditions of any free trial are set when you sign up and may change for future sign ups at any time.',
+    ['Free trial and free starter credits',
+      'New accounts may receive free starter credits. At the date of these Terms this is 1,000 credits, which can be used on the standard tools (Chat, Image, Video Studio, Docs, Code and AI Apps) but not on the Pro tools. The amount, availability and conditions of any free credits are set when you sign up and may change for future sign ups at any time.',
       'Free credits have no cash value, cannot be transferred or refunded, may expire, and may be withdrawn if we reasonably believe they were obtained by misuse, including through duplicate or automated accounts.'],
     ['Credits, plans and payment',
       'The Service uses credits. Each request uses credits according to the Model and features used, for example the length of your messages and replies, documents built, images or video seconds generated, and transcription of voice recordings. An estimate is shown where practical, but the actual amount used can differ from an estimate.',
       'Credits are units for using the Service only. They are not money, a deposit, a stored-value facility, legal tender, cryptocurrency or an investment. They do not earn interest, cannot be exchanged for cash and cannot be transferred between accounts except where we expressly allow it.',
-      'Paid plans and credit packs are charged in advance at the price shown at checkout, including any taxes shown. Monthly plans renew automatically until cancelled. You can cancel at any time and your plan will end at the end of the current billing period.',
-      'Because our costs depend on Model Providers and other Suppliers, we may change the credit cost of a Model, our plans, credit packs and prices from time to time. Changes apply from the time they are published and do not affect requests already completed or plan periods already paid for, except where the law allows.',
+      'Paid plans and top-up packs are charged in advance at the price shown at checkout, including any taxes shown. Monthly plans renew automatically until cancelled. You can cancel at any time and your plan will end at the end of the current billing period.',
+      'Credit validity. Credits included in a monthly plan are valid for one billing period (one month from your billing date). Plan credits that are unused when your plan renews, or when your plan ends, expire and do not roll over. Credits from a one-time top-up pack are valid for 90 days from the date of purchase and expire after that; you may buy several packs and may buy one at any time. Expired credits cannot be restored or refunded, except where the law requires.',
+      'Order of use. When you have plan credits and top-up credits, plan credits are used first, then top-up credits in order of their expiry date, then free credits.',
+      'Pro tools. Ad Studio, Video Builder, Video Agent and Studio Pro (the Pro tools) are available while you have an active paid plan or unexpired paid credits (plan or top-up credits). They use paid credits only. When you have no paid credits left they are paused until you buy a top-up pack or your plan renews.',
+      'Credits held before 20 November 2026 were kept: paid credits were carried over as paid credits and free credits as free credits, on the terms that applied to them when they were obtained.',
+      'Because our costs depend on Model Providers and other Suppliers, we may change the credit cost of a Model, our plans, top-up packs and prices from time to time. Changes apply from the time they are published and do not affect requests already completed or plan periods already paid for, except where the law allows.',
       'If your balance is too low, requests may be refused or stopped part way. We are not responsible for the consequences of a request not being completed because you did not have enough credits.',
       'Payments are processed by third-party payment processors. By paying you authorise us and our payment processor to charge your chosen payment method.'],
     ['Refunds',

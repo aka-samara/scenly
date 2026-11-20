@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import db, { save, id, now, MEDIA_DIR } from './db.js';
 import { findModel, estimateVideoCredits, paidUsd, imageUsd } from './catalog.js';
-import { usdToCredits, centsToCredits, grant, charge, round2 } from './credits.js';
+import { usdToCredits, centsToCredits, grant, charge, round2, needCredits, inPro } from './credits.js';
 import { getFiles, dataUrl, filePath, fileMeta } from './files.js';
 import { callJson, GatewayError, tidyProviderText } from './gateway.js';
 import { recordFailure } from './monitor.js';
@@ -198,7 +198,7 @@ export async function runImage(user, { modelId, prompt, fileIds = [], size, qual
   const chosenSize = model.image.sizes.includes(size) ? size : (refs[0] && sizeLike(model, refs[0])) || model.image.sizes[0];
   const usdEach = imageUsd(model, chosenSize, quality);
   const est = usdToCredits(usdEach, model) * 1.5 * count;
-  if (user.credits < est) throw new UserError(`Not enough credits. This needs about ${Math.ceil(est)} credits.`, 402, 'insufficient_credits');
+  needCredits(user, est);
 
   // Ask for several images in one call when the model allows it, otherwise run calls in parallel.
   // Seedream counts reference pictures and results together: at most 15 per request.
@@ -271,7 +271,7 @@ export async function startVideo(user, { modelId, prompt, fileIds = [], videoUrl
     if (task === 'edit' && !videos.length && !videoUrl) throw new UserError('Add the video you want to edit first.');
   }
   // Checked last, so a wrong setting is explained before the balance is.
-  if (user.credits < reserveEach * count) throw new UserError(`Not enough credits. This needs about ${Math.ceil(reserveEach * count)} credits.`, 402, 'insufficient_credits');
+  needCredits(user, reserveEach * count);
   const body = { model: model.id, prompt, duration: params.duration, ratio: params.ratio, resolution: params.resolution, watermark: false };
   if (images.length && v.imageToVideo) body.image_urls = images.slice(0, v.maxImages || 1).map((f) => pictureLink(f) || dataUrl(f));
   if (v.videoToVideo && (videos.length || videoUrl)) {
@@ -299,7 +299,7 @@ export async function startVideo(user, { modelId, prompt, fileIds = [], videoUrl
   if (!taskIds.length) throw firstErr;
   for (const tid of taskIds) {
     charge(user, reserveEach, `Video (reserved) · ${model.name}`, { model: model.id, taskId: tid, ...target });
-    db.tasks.push({ taskId: tid, userId: user.id, ...target, model: model.id, prompt, reserved: reserveEach, status: 'pending', createdAt: now() });
+    db.tasks.push({ taskId: tid, userId: user.id, ...target, model: model.id, prompt, reserved: reserveEach, status: 'pending', createdAt: now(), ...(inPro() ? { pro: true } : {}) });
   }
   save();
   return { model, taskIds, params, reserved: round2(reserveEach * taskIds.length), refs: files.map(fileMeta), partialError: firstErr && taskIds.length < count ? firstErr.message : null };
@@ -328,7 +328,7 @@ export async function pollTask(t) {
         const actual = Number(j.usage?.charge_amount) > 0 ? round2(usdToCredits(j.usage.charge_amount, t.model)) : t.reserved;
         const diff = round2(t.reserved - actual);
         if (diff > 0) grant(user, diff, 'refund', `Video settle refund · ${name}`, { taskId: t.taskId });
-        else if (diff < 0) charge(user, -diff, `Video settle · ${name}`, { taskId: t.taskId });
+        else if (diff < 0) charge(user, -diff, `Video settle · ${name}`, { taskId: t.taskId, pro: !!t.pro });
         t.credits = actual;
         if (rec) { rec.media = [...(rec.media || []), mediaRef(media)]; }
       } else {
@@ -408,7 +408,7 @@ export async function enhancePrompt(user, prompt, mode, fileIds = [], opts = {})
   const images = mode === 'image' ? getFiles(user, fileIds || []).filter((f) => f.kind === 'image').slice(0, 2) : [];
   const typed = String(prompt || '').trim().slice(0, 4000);
   if (!typed && !images.length) throw new UserError('Type an idea first.');
-  if (user.credits < centsToCredits(0.5)) throw new UserError('Not enough credits.', 402, 'insufficient_credits');
+  needCredits(user, centsToCredits(0.5));
   // A photo with no words: suggest the most useful polish for what is in the picture.
   const text = typed || 'No request was typed. Suggest a tasteful improvement of this picture: better light, cleaner background, sharper detail.';
   const tries = [];

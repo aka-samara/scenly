@@ -6,7 +6,9 @@ import express from 'express';
 import db, { save, id, now } from './db.js';
 import { callJson } from './gateway.js';
 import { UserError } from './generate.js';
-import { usdToCredits } from './credits.js';
+import { usdToCredits, balanceOf, ensure } from './credits.js';
+import { spend as spendW } from './wallet.js';
+const spendCredits = (user, c) => spendW(ensure(user), c);
 
 const MODELS = () => String(process.env.VOICE_MODELS || 'gemini-3.1-flash-lite,mimo-v2.6-flash').split(',').map((s) => s.trim()).filter(Boolean);
 const LANGS = { en: 'English', ar: 'Arabic', ckb: 'Kurdish (Sorani)', ku: 'Kurdish (Kurmanji)', tr: 'Turkish', fa: 'Persian', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', pt: 'Portuguese', ru: 'Russian', hi: 'Hindi', ur: 'Urdu', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', nl: 'Dutch', sv: 'Swedish', pl: 'Polish', id: 'Indonesian' };
@@ -55,10 +57,10 @@ export async function transcribe(buf, lang, signal, models = MODELS()) {
 // Voice input costs a fraction of a credit per clip, so the ledger keeps one line per session, not one per clip.
 function chargeVoice(user, usd) {
   const c = Math.round(usdToCredits(usd) * 10000) / 10000; if (!(c > 0)) return 0;
-  user.credits = Math.round(((user.credits || 0) - c) * 10000) / 10000;
+  const parts = spendCredits(user, c); // plan credits first, then top-ups, then free credits
   const last = [...db.ledger].reverse().find((l) => l.userId === user.id);
-  if (last && last.kind === 'voice' && Date.now() - new Date(last.at).getTime() < 15 * 60 * 1000) { last.credits = Math.round((last.credits - c) * 10000) / 10000; last.balance = user.credits; }
-  else db.ledger.push({ id: id('l_'), userId: user.id, type: 'usage', kind: 'voice', credits: -c, balance: user.credits, desc: 'Voice input', at: now() });
+  if (last && last.kind === 'voice' && Date.now() - new Date(last.at).getTime() < 15 * 60 * 1000) { last.credits = Math.round((last.credits - c) * 10000) / 10000; last.balance = user.credits; last.parts = [...(last.parts || []), ...parts]; }
+  else db.ledger.push({ id: id('l_'), userId: user.id, type: 'usage', kind: 'voice', credits: -c, balance: user.credits, desc: 'Voice input', at: now(), parts });
   save();
   return c;
 }
@@ -67,7 +69,7 @@ export function mountVoice(app, { requireUser, wrap }) {
   app.post('/api/voice/transcribe', requireUser, express.raw({ type: () => true, limit: MAX_BYTES }), wrap(async (req, res) => {
     const buf = Buffer.isBuffer(req.body) ? req.body : null;
     if (!buf || buf.length < 2000 || buf.toString('latin1', 0, 4) !== 'RIFF' || buf.toString('latin1', 8, 12) !== 'WAVE') throw new UserError('That recording could not be read. Please try again.');
-    if ((req.user.credits || 0) <= 0) throw new UserError('You are out of credits, so voice input is paused. Top up to keep using it.', 402, 'insufficient_credits');
+    if (balanceOf(req.user, { pro: false }) <= 0) throw new UserError('You are out of credits, so voice input is paused. Top up to keep using it.', 402, 'insufficient_credits');
     const ctl = new AbortController(); res.on('close', () => { if (!res.writableEnded) ctl.abort(); });
     let r;
     try { r = await transcribe(buf, String(req.query.lang || '').toLowerCase().split('-')[0], ctl.signal); }
