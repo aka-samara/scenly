@@ -140,9 +140,33 @@ function build(raw) {
     out.push(model);
   }
   setDiscounts(out);
+  const list = dedupe(out);
   const order = { chat: 0, image: 1, video: 2 };
-  return out.sort((a, b) => order[a.type] - order[b.type] || a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
+  return list.sort((a, b) => order[a.type] - order[b.type] || a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
 }
+
+// The gateway sometimes lists one model under two ids (a dated snapshot such as claude-opus-5-202609, or an
+// alias such as claude-opus-5-5-cc). Pickers show each model once: the cheaper id, or on a tie the shorter one.
+// The other id still works for older chats and saved settings (findModel maps it to the one that is shown).
+const aliases = new Map(); // hidden id -> shown id
+const unitPrice = (m) => m.price.creditsPerMessage ?? m.price.creditsPerImage ?? Math.min(...Object.values(m.price.creditsPerSecond || {}).filter(Number.isFinite), Infinity);
+function dedupe(models) {
+  const keep = new Map();
+  for (const m of models) {
+    const k = m.type + '|' + m.name.trim().toLowerCase();
+    const cur = keep.get(k);
+    if (!cur) { keep.set(k, m); continue; }
+    const better = unitPrice(m) < unitPrice(cur) - 1e-9 || (Math.abs(unitPrice(m) - unitPrice(cur)) <= 1e-9 && m.id.length < cur.id.length);
+    const [win, lose] = better ? [m, cur] : [cur, m];
+    keep.set(k, win); aliases.set(lose.id, win.id);
+  }
+  for (const [a, b] of aliases) if (aliases.has(b)) aliases.set(a, aliases.get(b));
+  const shown = new Set([...keep.values()].map((m) => m.id));
+  for (const id of shown) aliases.delete(id);
+  return models.filter((m) => shown.has(m.id));
+}
+export const modelAlias = (mid) => aliases.get(mid) || null;
+export const modelAliases = () => Object.fromEntries(aliases);
 
 // A model the gateway refused for this account stays hidden for 30 minutes, then is offered again.
 const REFUSED_FOR_MS = () => (Number(process.env.REFUSED_MODEL_MINUTES) || 30) * 60000;
@@ -196,7 +220,8 @@ export function imageUsd(model, size, quality) {
 export function imageCredits(model, size, quality) { return usdToCredits(imageUsd(model, size, quality), model); }
 
 export async function findModel(mid) {
-  return (await getCatalog()).find((m) => m.id === mid);
+  const all = await getCatalog();
+  return all.find((m) => m.id === mid) || (aliases.has(mid) ? all.find((m) => m.id === aliases.get(mid)) : undefined);
 }
 
 export function estimateVideoCredits(model, resolution, duration) {
