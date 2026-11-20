@@ -18,6 +18,8 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch { re
 const session = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* private mode */ } } };
 const getLang = () => { const v = store.get('pm-voice-lang'); return LANGS.some(([c]) => c === v) ? v : 'auto'; };
 
+const norm = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
 let active = null;
 
 // The microphone button for a prompt textarea.
@@ -37,7 +39,7 @@ function start(ta, btn) {
   const lang = getLang();
   const s = { ta, btn, lang, startedAt: Date.now(), lastVoice: Date.now(), parts: [], live: '', liveSkip: 0, interim: '', base: ta.value, lastSet: ta.value, pending: 0, failed: 0, level: 0, finishing: false, ended: false, heard: false };
   active = s;
-  const wantRecorder = !SR || RECORD_ONLY.has(lang) || session.get('pm-voice-engine2') === 'record';
+  const wantRecorder = !SR || RECORD_ONLY.has(lang) || session.get('pm-voice-engine2') === 'record' || Date.now() < Number(session.get('pm-voice-nolive') || 0);
   // Safari only lets audio start inside the click, so the recorder's audio context is made right here.
   if (wantRecorder) { const AC = window.AudioContext || window.webkitAudioContext; try { s.ctx = AC ? new AC() : null; s.ctx?.resume?.().catch(() => {}); } catch { s.ctx = null; } }
   buildStrip(s);
@@ -158,7 +160,17 @@ function runSpeech(s) {
     rec.onspeechstart = rec.onsoundstart = () => { s.lastVoice = Date.now(); };
     rec.onresult = (e) => {
       let fin = '', inter = '';
-      for (let i = 0; i < e.results.length; i++) { const r = e.results[i]; const t = r[0]?.transcript || ''; if (r.isFinal) fin += (fin && !/^\s/.test(t) ? ' ' : '') + t; else inter += t; }
+      let prev = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const r = e.results[i]; const t = r[0]?.transcript || '';
+        if (!r.isFinal) { inter += t; continue; }
+        // Some engines (Safari, some phones) send a finished sentence twice, or send the whole text so far again.
+        const a = norm(t), b = norm(fin);
+        if (a.length > 12 && a === prev) continue;
+        if (b.length > 12 && a.startsWith(b)) fin = t; else fin += (fin && !/^\s/.test(t) ? ' ' : '') + t;
+        prev = a;
+      }
+      if (inter && norm(fin).length > 12 && norm(inter).startsWith(norm(fin))) fin = '';   // the unfinished text already holds it
       gotResult = true; everResult = true; s.heard = true; s.lastVoice = Date.now();
       s.live = fin; s.interim = inter; write(s);
     };
@@ -174,13 +186,17 @@ function runSpeech(s) {
       if (fatal === 'not-allowed') return fail(s, micMessage({ name: 'NotAllowedError' }));
       if (fatal === 'audio-capture') return fail(s, micMessage({ name: 'NotFoundError' }));
       if (fatal === 'network' && gotResult) netFails = 0;
-      if (fatal === 'network' && ++netFails <= 2) { restart = setTimeout(begin, 600); return; }   // a short drop: keep the live engine
+      // Browsers built on Chrome without Google's speech service (Brave, Opera, Vivaldi, some company networks) fail like this
+      // on every try: waiting through retries loses the first sentence, so the recorder takes over at once, for ten minutes.
+      if (fatal === 'network' && !everResult) { session.set('pm-voice-nolive', String(Date.now() + 600000)); return toRecorder(false, 'speech service unreachable'); }
+      if (fatal === 'network' && ++netFails <= 2) { restart = setTimeout(begin, 150); return; }   // a short drop mid-sentence: keep the live engine
       if (fatal) return toRecorder(fatal !== 'network', fatal);   // service-not-allowed, language-not-supported, or a network that keeps failing
       quick = !gotResult && Date.now() - began < 1500 ? quick + 1 : 0;
       // Engines that end at once again and again without ever hearing anything are not working here.
       // Once words have come through, a quick end is only a pause (Safari and phones end often): keep going.
       if (quick >= 4 && !everResult) return toRecorder(false, 'ends at once');
-      restart = setTimeout(begin, quick ? Math.min(1500, 250 * quick) : 250);   // the engines stop after a pause; keep listening until the person is done
+      // The engines stop after a pause; keep listening until the person is done. Every millisecond here is a word that can be missed.
+      restart = setTimeout(begin, quick ? Math.min(1500, 250 * quick) : 0);
     };
     // Some browsers have the feature but never start it and never say why: do not wait for ever.
     clearTimeout(watchdog);

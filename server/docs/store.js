@@ -15,6 +15,10 @@ const versionFile = (d, n) => path.join(docDir(d), `v${n}.json`);
 export const userDoc = (user, did) => db.documents.find((d) => d.id === did && d.userId === user.id);
 export const convDocs = (user, cid) => db.documents.filter((d) => d.userId === user.id && d.conversationId === cid);
 
+// A document lives in a chat. Editing it by hand, undoing or restoring a version is work on that chat,
+// so the chat moves to the top of Recents like it does after a new message.
+function touchConv(d) { const c = d.conversationId && db.conversations.find((x) => x.id === d.conversationId && x.userId === d.userId); if (c) c.updatedAt = d.updatedAt; }
+
 export function createDoc(user, { kind, title, conversationId, projectId, brandId }) {
   const d = { id: id('d_'), userId: user.id, kind, title: String(title || 'Untitled').slice(0, 120), conversationId, projectId, brandId, versions: [], current: 0, createdAt: now(), updatedAt: now() };
   fs.mkdirSync(docDir(d), { recursive: true });
@@ -31,7 +35,7 @@ export function addVersion(d, spec, { note = '', by = 'ai', model, summary } = {
   d.versions.push({ n, note: String(note).slice(0, 300), by, model, summary, base: d.current || undefined, createdAt: now() });
   d.current = n;
   if (spec.title) d.title = String(spec.title).slice(0, 120);
-  d.updatedAt = now();
+  d.updatedAt = now(); touchConv(d);
   save();
   return n;
 }
@@ -43,7 +47,7 @@ export function readVersion(d, n = d.current) {
 
 export function setCurrent(d, n) {
   if (!d.versions.some((v) => v.n === Number(n))) return false;
-  d.current = Number(n); d.updatedAt = now(); save();
+  d.current = Number(n); d.updatedAt = now(); touchConv(d); save();
   return true;
 }
 
