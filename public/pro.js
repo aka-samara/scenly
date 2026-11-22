@@ -2,9 +2,9 @@
 // One section, several tools: Home, Agent (one line in, a finished ad, clip or film out), Image, Video and Enhancer.
 // Everything is made through the same server routes as the rest of Scenly, so results land in Assets and Recents.
 import { micButton } from './voice.js';
-import { h, $, $$, icon, S, store, api, toast, errToast, popover, closePop, pickFiles, uploadFiles, topbar, fmtCredits, setCredits, info, openLightbox, byId, modelLogo, shortName, refreshRecents } from './app.js';
+import { h, pageCss, $, $$, icon, S, store, api, toast, errToast, popover, closePop, pickFiles, uploadFiles, topbar, fmtCredits, setCredits, info, openLightbox, byId, modelLogo, shortName, refreshRecents } from './app.js';
 
-if (!$('#pro-css')) document.head.append(h('link', { id: 'pro-css', rel: 'stylesheet', href: '/pro.css' }));
+await pageCss('pro-css', '/pro.css'); // drawn only once its stylesheet is in
 let INFO = null;
 const LISTED = new Set(); // agent sessions already shown in Recents
 let live = 0; // bumps on every render, so polls started by an older screen stop

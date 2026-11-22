@@ -1165,8 +1165,26 @@ window.addEventListener('beforeunload', (e) => { if ([...JOBS].some((j) => j.ctr
 
 // ---------- routing ----------
 let pollTimer = null;
+// The Video Agent, Video Builder, Studio Pro, Ad Studio and admin pages bring their own stylesheet. Each page waits
+// for it before drawing, so it never shows unstyled for a moment the first time it is opened after signing in.
+export function pageCss(id, href) {
+  let link = document.getElementById(id);
+  if (!link) { link = h('link', { id, rel: 'stylesheet', href }); document.head.append(link); }
+  if (link.sheet) return Promise.resolve();
+  return new Promise((done) => { link.addEventListener('load', done, { once: true }); link.addEventListener('error', done, { once: true }); setTimeout(done, 4000); });
+}
+// Once signed in, fetch those stylesheets quietly in the background (cached, not applied), so the first visit is not slowed by the wait above.
+function warmPageCss() {
+  if (warmPageCss.done || !S.user) return; warmPageCss.done = true;
+  const f = S.config?.flags || {};
+  const list = [f.videoBuilder && '/builder.css', f.studioPro && '/pro.css'].filter(Boolean);
+  const go = () => list.forEach((href) => document.head.append(h('link', { rel: 'preload', as: 'style', href })));
+  (window.requestIdleCallback || ((cb) => setTimeout(cb, 1500)))(go, { timeout: 3000 });
+}
+
 async function route() {
   closePop();
+  warmPageCss();
   clearTimeout(pollTimer);
   const hash = location.hash.replace(/^#/, '') || '/';
   const section = hash.startsWith('/c/') ? 'chat' : hash.split('/')[1] || 'chat';

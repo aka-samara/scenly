@@ -1,9 +1,9 @@
 // Video Builder: put clips, pictures and AI scenes in order, add a voice-over, music and captions, then export one video.
 // Loaded only when the Video Builder is switched on. The timeline maths is the same file the server uses for the export.
-import { h, $, $$, icon, S, api, toast, errToast, popover, closePop, dialog, field, pickFiles, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles } from './app.js';
+import { h, pageCss, $, $$, icon, S, api, toast, errToast, popover, closePop, dialog, field, pickFiles, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles } from './app.js';
 import { layout, estimate, allowedDuration, sceneCredits, editCredits, curVersion } from './vendor/builder-plan.js';
 
-if (!$('#vb-css')) document.head.append(h('link', { id: 'vb-css', rel: 'stylesheet', href: '/builder.css' }));
+await pageCss('vb-css', '/builder.css'); // drawn only once its stylesheet is in
 
 let B = null; // the open project
 let INFO = null;

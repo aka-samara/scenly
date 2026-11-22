@@ -1,8 +1,8 @@
 // Video Agent: one prompt becomes a storyboard that opens in the Video Builder. Nothing is generated until it is approved there.
 import { micButton } from './voice.js';
-import { h, $, $$, icon, S, store, api, toast, errToast, info, topbar, fmtCredits, setCredits, popover, closePop, pickFiles } from './app.js';
+import { h, pageCss, $, $$, icon, S, store, api, toast, errToast, info, topbar, fmtCredits, setCredits, popover, closePop, pickFiles } from './app.js';
 
-if (!$('#vb-css')) document.head.append(h('link', { id: 'vb-css', rel: 'stylesheet', href: '/builder.css' }));
+await pageCss('vb-css', '/builder.css'); // drawn only once its stylesheet is in
 let INFO = null;
 const TPL_ICON = { product: 'bag', ugc: 'user', explainer: 'brain', music: 'audio', story: 'star', general: 'film' };
 const fmtLen = (s) => (s >= 60 ? `${s / 60} min` : `${s} s`);
