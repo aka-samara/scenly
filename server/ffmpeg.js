@@ -79,6 +79,14 @@ export async function probe(file, opts = {}) {
   return { duration: Math.round(duration * 1000) / 1000, hasVideo: !!v, hasAudio: !!a, width: v ? (rot ? v.height : v.width) : 0, height: v ? (rot ? v.width : v.height) : 0, fps: Math.round(fps * 100) / 100, videoCodec: v?.codec_name || null, audioCodec: a?.codec_name || null, format: j.format?.format_name || null };
 }
 
+// A file that came in as a video but has sound and no picture (an .m4a sent as video/mp4, a .webm song) is a sound file.
+// Returns true when it changed the record, so callers can save.
+export function soundOnly(rec, info) {
+  if (!rec || rec.kind !== 'video' || !info || info.hasVideo || !info.hasAudio) return false;
+  rec.kind = 'audio'; rec.mime = /webm/.test(rec.mime || '') ? 'audio/webm' : 'audio/mp4'; delete rec.proxyKey;
+  return true;
+}
+
 // A still picture from a video (for grids and lists).
 export async function makePoster(src, out, { at = 0.5, width = 640, signal } = {}) {
   fs.mkdirSync(path.dirname(out), { recursive: true });
