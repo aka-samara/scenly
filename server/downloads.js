@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import db, { save, id, now } from './db.js';
 import { bucketUrl, forget, locate, hasBytes, signDownload, readDownloadToken, downloadName, contentDisposition, usage, limits, keys, abs, remove, sizeOf, DOWNLOAD_TTL, MB } from './storage.js';
-import { ffmpegInfo, probe, makePoster, makeProxy } from './ffmpeg.js';
+import { ffmpegInfo, probe, makePoster, makeProxy, soundOnly } from './ffmpeg.js';
 import { defineJob, enqueue, getJob, listJobs, cancelJob, publicJob, jobStats } from './jobs.js';
 import { streamZip, zipSize, ZIP_MAX_BYTES, ZIP_MAX_FILES } from './zipstream.js';
 import { mediaHooks, UserError } from './generate.js';
@@ -22,6 +22,7 @@ defineJob('derive', async (job, { signal, progress }) => {
   if (!info) { rec.unreadable = true; save(); throw Object.assign(new Error('This file could not be read as a video or sound file.'), { retry: false }); }
   Object.assign(rec, { duration: info.duration, hasAudio: info.hasAudio });
   if (info.hasVideo) Object.assign(rec, { w: info.width, h: info.height, fps: info.fps });
+  soundOnly(rec, info); // a song that arrived as a video file stays a sound file
   save(); progress(0.2, 'Reading the file');
   if (info.hasVideo) {
     const posterKey = keys.derived(rec.userId, rec.id, 'poster.jpg');

@@ -146,8 +146,9 @@ async function studyMaterial(user, files, link, notes, signal) {
     else { let tmp = null; try { tmp = await fetchVideoLink(link, signal); await video(tmp, 'from the link'); got.link = true; } catch (e) { if (signal?.aborted) throw e; notes.push(e instanceof UserError ? e.message : 'The video behind that link could not be read. Upload it instead.'); } finally { if (tmp) fs.rmSync(tmp, { force: true }); } }
   }
   for (const key of ['voice', 'music']) {
-    const f = files[key] && userFile(user.id, String(files[key])); if (!f || f.kind !== 'audio') continue;
+    const f = files[key] && userFile(user.id, String(files[key])); if (!f || (f.kind !== 'audio' && f.kind !== 'video')) continue;
     try { await ensureProbed(f); } catch { continue; }
+    if (f.kind === 'video' && !f.hasAudio) continue; // a video picked as music gives only its sound
     got[key] = f;
     brief.push(key === 'voice' ? `- VOICE-OVER: the user recorded their own voice-over of ${Math.round(f.duration)} seconds. Plan the video for that length. Still write a narration line for each scene as a guide.` : `- MUSIC: the user's own song of ${Math.round(f.duration)} seconds is the soundtrack. Let the pictures follow the energy of a song.`);
   }
