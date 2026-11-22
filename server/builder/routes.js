@@ -9,7 +9,7 @@ import { flags } from '../flags.js';
 import { getCatalog, findModel } from '../catalog.js';
 import { reserve, usdToCredits, round2, canAfford, needCredits } from '../credits.js';
 import { forget, keys, abs, put, putFile, locate, hasBytes, sizeOf, contentDisposition, looksLike, limits, MB, safeExt } from '../storage.js';
-import { ffmpegInfo, needFfmpeg, probe, ffmpeg, FFMPEG_HELP, BURN_HELP } from '../ffmpeg.js';
+import { ffmpegInfo, needFfmpeg, probe, ffmpeg, FFMPEG_HELP, BURN_HELP, soundOnly } from '../ffmpeg.js';
 import { defineJob, enqueue, getJob, publicJob, cancelJob } from '../jobs.js';
 import { callJson } from '../gateway.js';
 import { UserError, publicFileUrl, pictureLink } from '../generate.js';
@@ -116,7 +116,7 @@ function applyDoc(project, body, userId) {
     if (!body[k]) continue;
     const t = body[k]; const cur = { ...(project[k] || {}) };
     if (k === 'music' && t.trackId) { const tr = db.tracks.find((x) => x.id === t.trackId); if (tr) { cur.trackId = tr.id; cur.fileId = tr.fileId; } }
-    else if (t.fileId) { const f = userFile(userId, t.fileId); if (f?.kind === 'audio') { cur.fileId = f.id; delete cur.trackId; } }
+    else if (t.fileId) { const f = userFile(userId, t.fileId); if (f?.kind === 'audio' || (f?.kind === 'video' && f.hasAudio)) { cur.fileId = f.id; delete cur.trackId; } }
     if (!cur.fileId) continue;
     cur.volume = num(t.volume, 0, 2, k === 'voice' ? 1 : 0.5);
     if (flags().precisionEdit) { cur.fadeIn = num(t.fadeIn, 0, 10, 0); cur.fadeOut = num(t.fadeOut, 0, 10, 0); }
@@ -135,8 +135,9 @@ async function pictureOk(rec) {
   rec.pictureOk = good; save(); return good;
 }
 async function ensureProbed(rec) {
-  if (!rec || rec.kind === 'image' || rec.duration) return rec;
-  const info = await probe(locate(rec));
+  // A "video" with a length but no picture size was read before sound-only videos were told apart: read it again.
+  if (!rec || rec.kind === 'image' || (rec.duration && !(rec.kind === 'video' && !rec.w))) return rec;
+  const info = await probe(locate(rec)); soundOnly(rec, info);
   if (!info || (rec.kind === 'video' && !info.hasVideo)) throw new UserError(`${rec.name}: this file could not be read. It may be damaged. Try saving it again as MP4 (video) or MP3 (sound).`, 422);
   Object.assign(rec, { duration: info.duration, hasAudio: info.hasAudio }); if (info.hasVideo) Object.assign(rec, { w: info.width, h: info.height, fps: info.fps });
   save(); return rec;
@@ -233,7 +234,7 @@ defineJob('scene', async (job, { signal, progress, log }) => {
     const { p, s } = findScene(job.payload.projectId, job.payload.sceneId); if (!s || job.status === 'done') return;
     s.jobId = undefined; s.status = s.versions?.length ? 'done' : job.status === 'cancelled' ? 'draft' : 'failed';
     const refunded = round2(job.payload.reserved || 0);
-    s.error = job.status === 'cancelled' ? undefined : `This scene failed and your ${refunded} credits were refunded. Try again?`;
+    s.error = job.status === 'cancelled' ? undefined : `This scene failed and your ${Math.round(refunded).toLocaleString('en-US')} credits were refunded. Try again?`;
     p.rev = (p.rev || 0) + 1; save();
   } });
 
@@ -371,16 +372,19 @@ export function mountBuilder(app, { requireUser, requireAdmin, wrap }) {
       try {
         if (f.kind === 'video' || f.kind === 'audio') await ensureProbed(f);
         if (f.kind === 'image' && !(await pictureOk(f))) { notes.push(`${f.name}: this picture could not be read. It may be damaged. Save it again as PNG or JPG and add it again.`); continue; }
-        if (f.kind === 'video' || f.kind === 'image') {
+        // Picked with the Add button of the Voice or Music row: a video gives its sound to that track instead of becoming a scene.
+        const asSound = f.kind === 'video' && (req.body.audioAs === 'music' || req.body.audioAs === 'voice');
+        if (asSound && !f.hasAudio) { notes.push(`${f.name} has no sound, so it could not be used as ${req.body.audioAs === 'voice' ? 'the voice-over' : 'the music'}.`); continue; }
+        if ((f.kind === 'video' && !asSound) || f.kind === 'image') {
           if (p.scenes.length >= MAX_SCENES) { notes.push(`${f.name}: left out, a project can hold up to ${MAX_SCENES} scenes.`); continue; }
           p.scenes.splice(at++, 0, f.kind === 'video' ? { id: id('sc_'), type: 'video', fileId: f.id, trimIn: 0, transition: 'cut', fit: 'pad' } : { id: id('sc_'), type: 'image', fileId: f.id, duration: IMAGE_SEC, transition: 'cut', fit: 'pad' });
           if (f.kind === 'video') deriveLater(f, { proxy: true });
-        } else if (f.kind === 'audio') {
+        } else if (f.kind === 'audio' || asSound) {
           if (f.duration > 20 * 60 + 1) { notes.push(`${f.name}: this sound file is ${Math.round(f.duration / 60)} minutes long. The limit is 20 minutes.`); continue; }
           const want = req.body.audioAs === 'music' || req.body.audioAs === 'voice' ? req.body.audioAs : !p.voice ? 'voice' : 'music';
           const slot = want === 'voice' && p.voice && !p.music && !req.body.audioAs ? 'music' : want;
           p[slot] = slot === 'voice' ? { fileId: f.id, volume: 1, offset: 0 } : { fileId: f.id, volume: 0.5, duck: true, duckDb: 12, fit: true };
-          notes.push(`${f.name} was added as ${slot === 'voice' ? 'the voice-over' : 'the music'}.`);
+          notes.push(`${f.name} was added as ${slot === 'voice' ? 'the voice-over' : 'the music'}${asSound ? ' (its sound only)' : ''}.`);
         } else notes.push(`${f.name}: only videos, pictures and sound files can be added here.`);
       } catch (e) { notes.push(e.message); }
     }

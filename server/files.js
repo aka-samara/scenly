@@ -38,14 +38,15 @@ export async function ingest(user, file, { allowAudio = false } = {}) {
   if (IMAGE_MIME.has(file.mimetype)) {
     rec.kind = 'image';
     keepMedia(user, rec, dest, safeExt(file.originalname, file.mimetype.split('/')[1].replace('jpeg', 'jpg')));
+  } else if (allowAudio && (AUDIO_EXT.has(ext) || /^audio\//.test(file.mimetype))) {
+    // Checked before videos: some computers label an .m4a song video/mp4, and a .webm song has a video ending.
+    rec.kind = 'audio';
+    if (!/^audio\//.test(rec.mime)) rec.mime = AUDIO_TYPES[ext] || 'audio/mpeg';
+    keepMedia(user, rec, dest, AUDIO_EXT.has(ext) ? ext : ['mp4', 'webm'].includes(ext) ? ext : 'mp3');
   } else if (VIDEO_MIME.has(file.mimetype) || ['mp4', 'mov', 'webm'].includes(ext)) {
     rec.kind = 'video';
     if (!rec.mime.startsWith('video/')) rec.mime = ext === 'mov' ? 'video/quicktime' : 'video/' + ext;
     keepMedia(user, rec, dest, ['mp4', 'mov', 'webm'].includes(ext) ? ext : 'mp4');
-  } else if (allowAudio && (AUDIO_EXT.has(ext) || /^audio\//.test(file.mimetype))) {
-    rec.kind = 'audio';
-    if (!/^audio\//.test(rec.mime)) rec.mime = AUDIO_TYPES[ext] || 'audio/mpeg';
-    keepMedia(user, rec, dest, AUDIO_EXT.has(ext) ? ext : 'mp3');
   } else {
     rec.kind = 'document';
     let text = '';
