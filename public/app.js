@@ -1261,16 +1261,16 @@ function assetKinds(accept) {
   if (/audio\/|\.mp3|\.wav|\.m4a/.test(a)) k.push('audio');
   return k;
 }
-const assetKind = (x) => (x.type === 'image' || x.type === 'video' ? x.type : /^audio\//.test(x.mime || '') ? 'audio' : '');
+const assetKind = (x) => (x.type === 'image' || x.type === 'video' || x.type === 'audio' ? x.type : /^audio\//.test(x.mime || '') ? 'audio' : '');
 // An asset handed to code that expects a File: an empty stand-in that carries the asset id. Uploads swap it for a
 // server-side copy (no download and upload again), and previews show the asset itself.
 function assetAsFile(x) {
   const k = assetKind(x);
   const mime = x.mime || (k === 'video' ? 'video/mp4' : 'image/png');
-  const ext = (mime.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('quicktime', 'mov').replace('mpeg', 'mp3');
+  const ext = mime === 'audio/mp4' ? 'm4a' : (mime.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('quicktime', 'mov').replace('mpeg', 'mp3').replace(/^x-/, '');
   const base = String(x.prompt || (k === 'audio' ? 'Sound' : k === 'video' ? 'Video' : 'Picture')).replace(/[\\/:*?"<>|\n]+/g, ' ').trim().slice(0, 40) || 'asset';
-  const f = new File([], `${base}.${ext}`, { type: mime });
-  Object.defineProperties(f, { assetId: { value: x.id }, assetUrl: { value: x.url }, assetKind: { value: k } });
+  const f = new File([], x.origin === 'upload' && x.name ? x.name : `${base}.${ext}`, { type: mime }); // an earlier upload keeps its own file name
+  Object.defineProperties(f, { assetId: { value: x.id }, assetUrl: { value: x.url }, assetKind: { value: k }, uploaded: { value: x.origin === 'upload' ? { id: x.id, name: x.name, kind: k, mime, size: x.size } : null } });
   return f;
 }
 { const make = URL.createObjectURL.bind(URL); URL.createObjectURL = (o) => (o && o.assetUrl) || make(o); }
@@ -1282,7 +1282,8 @@ async function uploadWithAssets(path, fd) {
   const qs = path.includes('?') ? path.slice(path.indexOf('?')) : '';
   const [fromReal, ...fromAssets] = await Promise.all([
     nReal ? api(path, { method: 'POST', body: real }) : Promise.resolve({ files: [], errors: [] }),
-    ...slots.filter(Boolean).map((v) => api(`/api/media/${v.assetId}/as-file${qs}`, { method: 'POST', body: { name: v.name } }).then((r) => ({ ...r.file, name: v.name }), (e) => ({ error: e.message }))),
+    // A file uploaded before is used as it is (files never change); an Assets result is copied on the server.
+    ...slots.filter(Boolean).map((v) => v.uploaded ? Promise.resolve({ ...v.uploaded }) : api(`/api/media/${v.assetId}/as-file${qs}`, { method: 'POST', body: { name: v.name } }).then((r) => ({ ...r.file, name: v.name }), (e) => ({ error: e.message }))),
   ]);
   const files = [], errors = [...(fromReal.errors || [])]; let ri = 0, ai = 0;
   for (const s of slots) {
@@ -1298,13 +1299,13 @@ async function openAssetPicker({ accept, multiple, kinds, title, onFiles }) {
   closePop();
   let pickerTab = 'all', pickerFrom = 'all';
   const label = { image: 'picture', video: 'video', audio: 'sound' };
-  const what = kinds.length === 1 ? label[kinds[0]] + (multiple ? 's' : '') : multiple ? 'files' : 'a file';
+  const what = kinds.length === 1 ? (multiple ? label[kinds[0]] + 's' : 'a ' + label[kinds[0]]) : multiple ? 'files' : 'a file';
   const chosen = new Map(); let items = null, shown = 60, q = '';
   const close = () => { bg.remove(); document.removeEventListener('keydown', onKey, true); };
   const onKey = (e) => { if (e.key === 'Escape' && document.body.contains(bg)) { e.stopPropagation(); close(); } };
   const finish = (list) => { close(); if (list.length) onFiles(list.map(assetAsFile)); };
   const device = h('button', { class: 'btn primary', id: 'ap-device', onclick: () => { close(); pickDevice(accept, multiple, onFiles); } }, icon('upload'), 'Upload from device');
-  const search = h('input', { type: 'search', id: 'ap-search', placeholder: 'Search your assets', autocomplete: 'off', oninput: (e) => { q = e.target.value.trim().toLowerCase(); shown = 60; draw(); } });
+  const search = h('input', { type: 'search', id: 'ap-search', placeholder: 'Search by prompt or file name', autocomplete: 'off', oninput: (e) => { q = e.target.value.trim().toLowerCase(); shown = 60; draw(); } });
   const tabs = h('div', { class: 'tabs ap-tabs', id: 'ap-tabs' });
   const from = h('select', { id: 'ap-from', title: 'The app it was made in', onchange: (e) => { pickerFrom = e.target.value; shown = 60; draw(); } });
   const grid = h('div', { class: 'ap-grid', id: 'ap-grid' }, h('div', { class: 'empty' }, h('span', { class: 'spin' })));
@@ -1316,7 +1317,7 @@ async function openAssetPicker({ accept, multiple, kinds, title, onFiles }) {
   drop.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); const f = [...(e.dataTransfer?.files || [])]; if (!f.length) return; close(); onFiles(multiple ? f : f.slice(0, 1)); };
   const bg = h('div', { class: 'modal-bg dlg ap-bg', onmousedown: (e) => { if (e.target === bg) close(); } },
     h('div', { class: 'modal ap-box', role: 'dialog', 'aria-label': `Add ${what}` },
-      h('div', { class: 'modal-head' }, h('div', { class: 'grow' }, h('b', {}, title || `Add ${what}`), h('small', {}, 'Upload a new file, or pick one you already have in Assets')), h('button', { class: 'icon-btn', title: 'Close', onclick: close }, icon('x'))),
+      h('div', { class: 'modal-head' }, h('div', { class: 'grow' }, h('b', {}, title || `Add ${what}`), h('small', {}, 'Upload a new file, or pick one you made or uploaded before')), h('button', { class: 'icon-btn', title: 'Close', onclick: close }, icon('x'))),
       drop,
       h('div', { class: 'ap-tools' }, h('label', { class: 'ap-search' }, icon('search'), search), tabs, from),
       h('div', { class: 'ap-scroll' }, grid),
@@ -1333,7 +1334,7 @@ async function openAssetPicker({ accept, multiple, kinds, title, onFiles }) {
     } },
       h('span', { class: 'ap-media' }, k === 'video' ? (x.poster ? h('img', { src: x.poster, alt: '', loading: 'lazy' }) : h('video', { src: x.url + '#t=0.1', muted: true, preload: 'metadata' })) : k === 'audio' ? icon('audio') : h('img', { src: x.url, alt: '', loading: 'lazy' }), k === 'video' && h('span', { class: 'ap-kind' }, icon('play'), x.duration ? `${Math.round(x.duration)}s` : ''), multiple && h('span', { class: 'pick' }, icon('check'))),
       h('span', { class: 'ap-cap' }, x.prompt || (k === 'audio' ? 'Sound' : k === 'video' ? 'Video' : 'Picture')),
-      h('span', { class: 'ap-from' }, icon(oicon), oname));
+      h('span', { class: 'ap-from' }, icon(oicon), oname, k === 'audio' && x.duration ? ` · ${Math.floor(x.duration / 60)}:${String(Math.round(x.duration % 60)).padStart(2, '0')}` : ''));
     if (k === 'audio') t.querySelector('.ap-media').append(h('audio', { src: x.url, controls: true, preload: 'none', onclick: (e) => e.stopPropagation() }));
     return t;
   };
@@ -1347,7 +1348,7 @@ async function openAssetPicker({ accept, multiple, kinds, title, onFiles }) {
     tabs.style.display = kinds.length > 1 ? '' : 'none';
     const count = (k) => items.filter((x) => (k === 'all' || assetKind(x) === k) && isFrom(x) && hit(x)).length;
     tabs.replaceChildren(...(kinds.length > 1 ? tabList : []).filter(([k]) => k === 'all' || k === pickerTab || count(k)).map(([k, l]) => h('button', { class: pickerTab === k ? 'on' : '', 'data-tab': k, onclick: () => { pickerTab = k; shown = 60; draw(); } }, `${l} ${count(k)}`)));
-    const order = ['image', 'video', 'pro', 'ads', 'agent', 'builder', 'edit', 'chat'];
+    const order = ['upload', 'image', 'video', 'pro', 'ads', 'agent', 'builder', 'edit', 'chat'];
     const keys = [...new Set(items.map(originKey))].sort((a, b) => (order.includes(a) ? order.indexOf(a) : 99) - (order.includes(b) ? order.indexOf(b) : 99) || a.localeCompare(b));
     if (pickerFrom !== 'all' && !keys.includes(pickerFrom)) pickerFrom = 'all';
     from.replaceChildren(h('option', { value: 'all' }, 'Made anywhere'), ...keys.map((k) => h('option', { value: k }, originInfo(k)[0])));
@@ -1358,7 +1359,9 @@ async function openAssetPicker({ accept, multiple, kinds, title, onFiles }) {
   };
   try {
     // Only files kept in Scenly can be copied into a new upload; results still held at the AI provider are left out.
-    items = (await api('/api/library')).items.filter((x) => kinds.includes(assetKind(x)) && String(x.url || '').startsWith('/api/media/'));
+    // Plus the files the user uploaded before (a song, a logo, a clip), so they never need to be uploaded twice.
+    const [lib, ups] = await Promise.all([api('/api/library'), api('/api/uploads').catch(() => ({ items: [] }))]);
+    items = [...lib.items.filter((x) => String(x.url || '').startsWith('/api/media/')), ...ups.items].filter((x) => kinds.includes(assetKind(x))).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   } catch (e) { items = []; errToast(e); }
   if (!document.body.contains(bg)) return;
   draw();
@@ -2742,7 +2745,7 @@ function assetButtons(x, cls = 'icon-btn sm') {
   ];
 }
 // The app each result was made in, for the Assets filter and the label on each tile.
-const ORIGIN = { image: ['Image', 'image'], video: ['Video Studio', 'video'], chat: ['Chat', 'chat'], pro: ['Studio Pro', 'wand'], ads: ['Ad Studio', 'megaphone'], builder: ['Video Builder', 'film'], agent: ['Video Agent', 'sparkle'], edit: ['Editor', 'edit'] };
+const ORIGIN = { upload: ['Your uploads', 'upload'], image: ['Image', 'image'], video: ['Video Studio', 'video'], chat: ['Chat', 'chat'], pro: ['Studio Pro', 'wand'], ads: ['Ad Studio', 'megaphone'], builder: ['Video Builder', 'film'], agent: ['Video Agent', 'sparkle'], edit: ['Editor', 'edit'] };
 const originKey = (x) => (x.origin === 'app' || (!x.origin && x.appId) ? 'app:' + x.appId : x.origin || (x.source === 'chat' ? 'chat' : x.type === 'video' ? 'video' : 'image'));
 const originInfo = (k) => { if (k.startsWith('app:')) { const aid = k.slice(4); return [S.apps.find((a) => a.id === aid)?.name || aid.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase()), 'apps']; } return ORIGIN[k] || ['Other', 'folder']; };
 const assetMedia = (x, extra = {}) => (x.type === 'video' ? h('video', { src: x.url, poster: x.poster || null, muted: true, preload: x.poster ? 'none' : 'metadata', ...extra }) : x.type === 'other' ? h('div', { class: 'audio-tile', onclick: (e) => e.stopPropagation() }, icon('audio'), h('audio', { src: x.url, controls: true, preload: 'none' })) : h('img', { src: x.url, alt: x.prompt || '', loading: 'lazy', ...extra }));

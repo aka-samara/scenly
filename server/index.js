@@ -323,6 +323,18 @@ app.post('/api/media/:id/as-file', requireUser, (req, res) => {
   if (kind === 'video' || kind === 'audio') deriveLater(rec, { proxy: req.query.proxy === '1' });
   res.json({ file: fileMeta(rec) });
 });
+// The user's own uploaded pictures, videos and sounds, newest first, so the "From my assets" picker can offer them again.
+// Copies made from Assets (fromMedia), pictures cut out of documents (derived) and repeats of the same file are left out.
+app.get('/api/uploads', requireUser, (req, res) => {
+  const seen = new Set(); const items = [];
+  const mine = db.files.filter((f) => f.userId === req.user.id && ['image', 'video', 'audio'].includes(f.kind) && !f.derived && !f.fromMedia && !f.fromUpload).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  for (const f of mine) {
+    const dup = `${f.kind}|${f.name}|${f.size}`; if (seen.has(dup)) continue; seen.add(dup);
+    items.push({ id: f.id, type: f.kind, mime: f.mime, size: f.size, name: f.name, prompt: f.name, url: `/api/files/${f.id}/raw`, poster: f.posterKey ? `/api/files/${f.id}/poster` : undefined, duration: f.duration || undefined, createdAt: f.createdAt, origin: 'upload' });
+    if (items.length >= 500) break;
+  }
+  res.json({ items });
+});
 app.get('/api/library', requireUser, (req, res) => {
   const gens = new Map(db.generations.filter((g) => g.userId === req.user.id).map((g) => [g.id, g]));
   const convs = new Map(db.conversations.filter((c) => c.userId === req.user.id).map((c) => [c.id, c]));

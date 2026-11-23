@@ -15,7 +15,7 @@ for (const mode of ['image', 'video']) {
   await p.locator('.ap-tile').first().click();
   if (await p.locator('#ap-use').count()) await p.click('#ap-use');
   await p.waitForTimeout(1500);
-  ok(await p.locator('.mat img, .mats img, [class*=mat] img').count() >= 1, mode + ' studio: asset added as a reference');
+  ok(await p.locator('[class*=mat] img, [class*=mat] video').count() >= 1, mode + ' studio: asset added as a reference');
   await p.screenshot({ path: `${OUT}/8-${mode}-ref.png` });
 }
 // chat attach in chat mode
