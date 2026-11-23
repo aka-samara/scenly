@@ -16,7 +16,7 @@ import { mailReady } from './mail.js';
 import { STYLES, STYLE_CATEGORIES, publicStyles, findStyle, styleLocked, applyStyle } from './styles.js';
 import { mountEdit, mediaFileId } from './edit.js';
 import { flags } from './flags.js';
-import { locate, limits, MB, bucketUrl, startBucket, mirror } from './storage.js';
+import { locate, hasBytes, limits, MB, bucketUrl, startBucket, mirror } from './storage.js';
 import { startBackups } from './backup.js';
 import { securityHeaders, sameOrigin, limit, mountHealth, checkSettings, gracefulShutdown, isProd } from './prod.js';
 import { ffmpegInfo } from './ffmpeg.js';
@@ -310,9 +310,17 @@ app.get('/api/media/:id', requireUser, (req, res) => {
 app.post('/api/media/:id/as-file', requireUser, (req, res) => {
   const m = db.files.find((x) => x.id === req.params.id && x.userId === req.user.id && x.kind === 'generated' && (x.key || x.file));
   if (!m) return res.status(404).json({ error: 'Only images saved in Scenly can be reused. Download it and upload it instead.' });
-  const rec = { id: id('f_'), userId: req.user.id, name: m.name || 'image.png', size: m.size, mime: m.mime, kind: m.mime.startsWith('video/') ? 'video' : 'image', fromMedia: m.id, createdAt: now() };
-  fs.copyFileSync(locate(m), filePath(rec)); mirror(filePath(rec));
+  const mime = String(m.mime || '');
+  // Sounds (music, voice) can be reused too, where the page asked for them (?audio=1, as with a new upload).
+  const kind = mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : mime.startsWith('image/') ? 'image' : '';
+  if (!kind || (kind === 'audio' && req.query.audio !== '1')) return res.status(400).json({ error: 'This kind of file cannot be used here.' });
+  const src = locate(m);
+  if (!hasBytes(m)) return res.status(404).json({ error: 'This file is no longer stored. Download it and upload it instead.' });
+  const rec = { id: id('f_'), userId: req.user.id, name: String(req.body?.name || m.name || 'image.png').slice(0, 200), size: m.size || fs.statSync(src).size, mime, kind, fromMedia: m.id, createdAt: now() };
+  fs.copyFileSync(src, filePath(rec)); mirror(filePath(rec));
   db.files.push(rec); save();
+  // Like a new upload: videos and sounds get their length, a poster and (when asked) a preview copy in the background.
+  if (kind === 'video' || kind === 'audio') deriveLater(rec, { proxy: req.query.proxy === '1' });
   res.json({ file: fileMeta(rec) });
 });
 app.get('/api/library', requireUser, (req, res) => {

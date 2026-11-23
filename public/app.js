@@ -185,6 +185,8 @@ async function checkSignIn() {
 }
 
 async function api(path, opts = {}) {
+  // A picked asset travels as an empty stand-in file; it is copied on the server instead of being sent again.
+  if (opts.body instanceof FormData && /^\/api\/files(\?|$)/.test(path) && [...opts.body.values()].some((v) => v instanceof File && v.assetId)) return uploadWithAssets(path, opts.body);
   // timeoutMs: give up waiting after this long (the server has its own, shorter limit; this is the last guard).
   let timer = null;
   if (opts.timeoutMs && !opts.signal) { const c = new AbortController(); timer = setTimeout(() => c.abort(), opts.timeoutMs); opts = { ...opts, signal: c.signal }; }
@@ -1237,9 +1239,130 @@ async function uploadFiles(files) {
   r.errors.forEach((e) => toast(e, 'error'));
   return r.files;
 }
-function pickFiles(accept, multiple, cb) {
+// Every place that adds a picture, video or sound offers two ways: upload from the device, or pick from Assets.
+// opts.direct skips the choice and opens the device file window straight away (used where a separate
+// "From my assets" button already sits next to it, or where the raw bytes are read in the browser).
+function pickFiles(accept, multiple, cb, opts = {}) {
+  const kinds = assetKinds(accept);
+  if (opts.direct || !kinds.length) return pickDevice(accept, multiple, cb);
+  openAssetPicker({ accept, multiple, kinds, title: opts.title, onFiles: cb });
+}
+function pickDevice(accept, multiple, cb) {
   const inp = h('input', { type: 'file', accept, multiple, hidden: true, onchange: (e) => { const f = [...e.target.files]; inp.remove(); if (f.length) cb(f); } });
   document.body.append(inp); inp.click();
+}
+// Which kinds of Assets fit a file window's accept list. Any file ('', chat attachments) offers pictures.
+function assetKinds(accept) {
+  const a = String(accept || '').toLowerCase();
+  if (!a) return ['image'];
+  const k = [];
+  if (/image\/|\.png|\.jpe?g|\.webp/.test(a)) k.push('image');
+  if (/video\/|\.mp4|\.mov|\.webm/.test(a)) k.push('video');
+  if (/audio\/|\.mp3|\.wav|\.m4a/.test(a)) k.push('audio');
+  return k;
+}
+const assetKind = (x) => (x.type === 'image' || x.type === 'video' ? x.type : /^audio\//.test(x.mime || '') ? 'audio' : '');
+// An asset handed to code that expects a File: an empty stand-in that carries the asset id. Uploads swap it for a
+// server-side copy (no download and upload again), and previews show the asset itself.
+function assetAsFile(x) {
+  const k = assetKind(x);
+  const mime = x.mime || (k === 'video' ? 'video/mp4' : 'image/png');
+  const ext = (mime.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('quicktime', 'mov').replace('mpeg', 'mp3');
+  const base = String(x.prompt || (k === 'audio' ? 'Sound' : k === 'video' ? 'Video' : 'Picture')).replace(/[\\/:*?"<>|\n]+/g, ' ').trim().slice(0, 40) || 'asset';
+  const f = new File([], `${base}.${ext}`, { type: mime });
+  Object.defineProperties(f, { assetId: { value: x.id }, assetUrl: { value: x.url }, assetKind: { value: k } });
+  return f;
+}
+{ const make = URL.createObjectURL.bind(URL); URL.createObjectURL = (o) => (o && o.assetUrl) || make(o); }
+// Sends the stand-ins of a form upload to /api/media/:id/as-file and the real files as before, keeping their order.
+async function uploadWithAssets(path, fd) {
+  const entries = [...fd.entries()];
+  const real = new FormData(); let nReal = 0; const slots = [];
+  for (const [k, v] of entries) { if (v instanceof File && v.assetId) slots.push(v); else { real.append(k, v); if (v instanceof File) { slots.push(null); nReal++; } } }
+  const qs = path.includes('?') ? path.slice(path.indexOf('?')) : '';
+  const [fromReal, ...fromAssets] = await Promise.all([
+    nReal ? api(path, { method: 'POST', body: real }) : Promise.resolve({ files: [], errors: [] }),
+    ...slots.filter(Boolean).map((v) => api(`/api/media/${v.assetId}/as-file${qs}`, { method: 'POST', body: { name: v.name } }).then((r) => ({ ...r.file, name: v.name }), (e) => ({ error: e.message }))),
+  ]);
+  const files = [], errors = [...(fromReal.errors || [])]; let ri = 0, ai = 0;
+  for (const s of slots) {
+    if (!s) { if (fromReal.files[ri]) files.push(fromReal.files[ri]); ri++; continue; }
+    const got = fromAssets[ai++]; if (got.error) errors.push(`${s.name}: ${got.error}`); else files.push(got);
+  }
+  while (ri < fromReal.files.length) files.push(fromReal.files[ri++]);
+  return { ...fromReal, files, errors };
+}
+
+// The picker: upload from the device, or search and browse Assets (filter by type and by the app that made it).
+async function openAssetPicker({ accept, multiple, kinds, title, onFiles }) {
+  closePop();
+  let pickerTab = 'all', pickerFrom = 'all';
+  const label = { image: 'picture', video: 'video', audio: 'sound' };
+  const what = kinds.length === 1 ? label[kinds[0]] + (multiple ? 's' : '') : multiple ? 'files' : 'a file';
+  const chosen = new Map(); let items = null, shown = 60, q = '';
+  const close = () => { bg.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape' && document.body.contains(bg)) { e.stopPropagation(); close(); } };
+  const finish = (list) => { close(); if (list.length) onFiles(list.map(assetAsFile)); };
+  const device = h('button', { class: 'btn primary', id: 'ap-device', onclick: () => { close(); pickDevice(accept, multiple, onFiles); } }, icon('upload'), 'Upload from device');
+  const search = h('input', { type: 'search', id: 'ap-search', placeholder: 'Search your assets', autocomplete: 'off', oninput: (e) => { q = e.target.value.trim().toLowerCase(); shown = 60; draw(); } });
+  const tabs = h('div', { class: 'tabs ap-tabs', id: 'ap-tabs' });
+  const from = h('select', { id: 'ap-from', title: 'The app it was made in', onchange: (e) => { pickerFrom = e.target.value; shown = 60; draw(); } });
+  const grid = h('div', { class: 'ap-grid', id: 'ap-grid' }, h('div', { class: 'empty' }, h('span', { class: 'spin' })));
+  const useBtn = h('button', { class: 'btn primary', id: 'ap-use', disabled: true, onclick: () => finish([...chosen.values()]) });
+  const foot = multiple ? h('div', { class: 'ap-foot' }, h('span', { class: 'grow', id: 'ap-count' }), h('button', { class: 'btn ghost', onclick: close }, 'Cancel'), useBtn) : null;
+  const drop = h('div', { class: 'ap-drop' }, device, h('span', { class: 'ap-or' }, 'or drag files here'));
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); const f = [...(e.dataTransfer?.files || [])]; if (!f.length) return; close(); onFiles(multiple ? f : f.slice(0, 1)); };
+  const bg = h('div', { class: 'modal-bg dlg ap-bg', onmousedown: (e) => { if (e.target === bg) close(); } },
+    h('div', { class: 'modal ap-box', role: 'dialog', 'aria-label': `Add ${what}` },
+      h('div', { class: 'modal-head' }, h('div', { class: 'grow' }, h('b', {}, title || `Add ${what}`), h('small', {}, 'Upload a new file, or pick one you already have in Assets')), h('button', { class: 'icon-btn', title: 'Close', onclick: close }, icon('x'))),
+      drop,
+      h('div', { class: 'ap-tools' }, h('label', { class: 'ap-search' }, icon('search'), search), tabs, from),
+      h('div', { class: 'ap-scroll' }, grid),
+      foot));
+  document.body.append(bg); document.addEventListener('keydown', onKey, true);
+  const countLine = () => { if (!foot) return; const n = chosen.size; bg.querySelector('#ap-count').textContent = n ? `${n} selected` : `Pick one or more ${what}`; useBtn.disabled = !n; useBtn.textContent = n > 1 ? `Use ${n}` : 'Use'; };
+  countLine();
+  const tile = (x) => {
+    const k = assetKind(x); const [oname, oicon] = originInfo(originKey(x));
+    const t = h('button', { class: 'ap-tile' + (chosen.has(x.id) ? ' picked' : ''), 'data-id': x.id, title: x.prompt || '', onclick: () => {
+      if (!multiple) return finish([x]);
+      if (chosen.has(x.id)) chosen.delete(x.id); else chosen.set(x.id, x);
+      t.classList.toggle('picked', chosen.has(x.id)); countLine();
+    } },
+      h('span', { class: 'ap-media' }, k === 'video' ? (x.poster ? h('img', { src: x.poster, alt: '', loading: 'lazy' }) : h('video', { src: x.url + '#t=0.1', muted: true, preload: 'metadata' })) : k === 'audio' ? icon('audio') : h('img', { src: x.url, alt: '', loading: 'lazy' }), k === 'video' && h('span', { class: 'ap-kind' }, icon('play'), x.duration ? `${Math.round(x.duration)}s` : ''), multiple && h('span', { class: 'pick' }, icon('check'))),
+      h('span', { class: 'ap-cap' }, x.prompt || (k === 'audio' ? 'Sound' : k === 'video' ? 'Video' : 'Picture')),
+      h('span', { class: 'ap-from' }, icon(oicon), oname));
+    if (k === 'audio') t.querySelector('.ap-media').append(h('audio', { src: x.url, controls: true, preload: 'none', onclick: (e) => e.stopPropagation() }));
+    return t;
+  };
+  const draw = () => {
+    if (!items) return;
+    const tabList = [['all', 'All'], ...kinds.map((k) => [k, { image: 'Images', video: 'Videos', audio: 'Sounds' }[k]])];
+    if (!tabList.some(([k]) => k === pickerTab) || kinds.length < 2) pickerTab = kinds.length < 2 ? kinds[0] : 'all';
+    const isType = (x) => pickerTab === 'all' || assetKind(x) === pickerTab;
+    const isFrom = (x) => pickerFrom === 'all' || originKey(x) === pickerFrom;
+    const hit = (x) => !q || `${x.prompt || ''} ${originInfo(originKey(x))[0]}`.toLowerCase().includes(q);
+    tabs.style.display = kinds.length > 1 ? '' : 'none';
+    const count = (k) => items.filter((x) => (k === 'all' || assetKind(x) === k) && isFrom(x) && hit(x)).length;
+    tabs.replaceChildren(...(kinds.length > 1 ? tabList : []).filter(([k]) => k === 'all' || k === pickerTab || count(k)).map(([k, l]) => h('button', { class: pickerTab === k ? 'on' : '', 'data-tab': k, onclick: () => { pickerTab = k; shown = 60; draw(); } }, `${l} ${count(k)}`)));
+    const order = ['image', 'video', 'pro', 'ads', 'agent', 'builder', 'edit', 'chat'];
+    const keys = [...new Set(items.map(originKey))].sort((a, b) => (order.includes(a) ? order.indexOf(a) : 99) - (order.includes(b) ? order.indexOf(b) : 99) || a.localeCompare(b));
+    if (pickerFrom !== 'all' && !keys.includes(pickerFrom)) pickerFrom = 'all';
+    from.replaceChildren(h('option', { value: 'all' }, 'Made anywhere'), ...keys.map((k) => h('option', { value: k }, originInfo(k)[0])));
+    from.value = pickerFrom; from.style.display = keys.length > 1 ? '' : 'none';
+    const list = items.filter((x) => isType(x) && isFrom(x) && hit(x));
+    grid.replaceChildren(...(list.length ? list.slice(0, shown).map(tile) : [h('div', { class: 'empty' }, items.length ? 'Nothing matches. Try another word or filter.' : `No ${what.replace(/^a /, '')} in Assets yet. Upload one from your device.`)]));
+    if (list.length > shown) grid.append(h('button', { class: 'btn ghost ap-more', id: 'ap-more', onclick: () => { shown += 60; draw(); } }, `Show more (${list.length - shown} left)`));
+  };
+  try {
+    // Only files kept in Scenly can be copied into a new upload; results still held at the AI provider are left out.
+    items = (await api('/api/library')).items.filter((x) => kinds.includes(assetKind(x)) && String(x.url || '').startsWith('/api/media/'));
+  } catch (e) { items = []; errToast(e); }
+  if (!document.body.contains(bg)) return;
+  draw();
+  if (matchMedia('(hover: hover)').matches) search.focus();
 }
 async function mediaAsFile(item) {
   const r = await api(`/api/media/${item.id}/as-file`, { method: 'POST' });
@@ -1979,11 +2102,11 @@ function openMaterialMenu(anchor, mode) {
   const canImg = mode === 'image' || (v.imageToVideo && task === 'create' && nImg < (v.maxImages || 1));
   const canVid = !!v?.videoToVideo && nVid < (v.maxVideos || 1);
   popover(anchor, h('div', { class: 'menu' },
-    canImg && h('button', { onclick: () => { closePop(); pickFiles('image/*', true, (f) => addStudioRefs(mode, f)); } }, icon('upload'), 'Upload image'),
-    canVid && h('button', { onclick: () => { closePop(); pickFiles('video/mp4,video/quicktime,video/webm', false, (f) => addStudioRefs(mode, f)); } }, icon('video'), 'Upload video'),
+    canImg && h('button', { onclick: () => { closePop(); pickFiles('image/*', true, (f) => addStudioRefs(mode, f), { direct: true }); } }, icon('upload'), 'Upload image'),
+    canVid && h('button', { onclick: () => { closePop(); pickFiles('video/mp4,video/quicktime,video/webm', false, (f) => addStudioRefs(mode, f), { direct: true }); } }, icon('video'), 'Upload video'),
     canVid && h('button', { onclick: () => { closePop(); const u = prompt('Paste a public link to an .mp4 or .mov video'); if (u && u.trim()) { S.studio.video.videoUrl = u.trim(); drawMats(mode); updateGo(); } } }, icon('link'), 'Paste video link'),
     h('hr'),
-    h('button', { onclick: () => { closePop(); pickFromAssets(mode, canVid, canImg); } }, icon('folder'), 'From my assets'),
+    h('button', { id: 'mat-assets', onclick: () => { closePop(); openAssetPicker({ accept: [canImg && 'image/*', canVid && 'video/mp4,video/quicktime,video/webm'].filter(Boolean).join(','), multiple: canImg && mode === 'image', kinds: [canImg && 'image', canVid && 'video'].filter(Boolean), title: 'Add a reference', onFiles: (f) => addStudioRefs(mode, f) }); } }, icon('folder'), 'From my assets'),
   ), 'above');
 }
 
@@ -2003,17 +2126,6 @@ async function addStudioRefs(mode, files) {
   const lim = (k) => refLimit(mode, k);
   st.refs = [...st.refs.filter((r) => r.kind === 'image').slice(-lim('image')), ...st.refs.filter((r) => r.kind === 'video').slice(-lim('video'))];
   drawMats(mode); updateGo();
-}
-
-async function pickFromAssets(mode, allowVideo, allowImage = true) {
-  const { items } = await api('/api/library');
-  const list = items.filter((x) => (allowImage && x.type === 'image') || (allowVideo && x.type === 'video')).slice(0, 60);
-  const bg = h('div', { class: 'modal-bg', onclick: (e) => { if (e.target === bg) bg.remove(); } },
-    h('div', { class: 'modal', style: { height: 'min(640px, 100%)' } },
-      h('div', { class: 'modal-head' }, h('div', { class: 'grow' }, h('b', {}, 'Pick from my assets'), h('small', {}, 'Click an item to use it as a reference')), h('button', { class: 'icon-btn', onclick: () => bg.remove() }, icon('x'))),
-      h('div', { style: { overflowY: 'auto', padding: '16px' } }, list.length ? h('div', { class: 'recent' }, list.map((x) => h('button', { class: 'tile', onclick: async () => { bg.remove(); await useAsReference(x, mode); } }, x.type === 'video' ? h('video', { src: x.url, muted: true, preload: 'metadata' }) : h('img', { src: x.url, alt: '', loading: 'lazy' })))) : h('div', { class: 'empty' }, 'No saved images yet.')),
-    ));
-  document.body.append(bg);
 }
 
 function openModelMenu(anchor, mode) {
@@ -3806,7 +3918,7 @@ function buildCodeBar() {
   const bar = h('div', { class: 'bar cx-bar' },
     h('div', { class: 'bar-top' }, h('span', { class: 'cx-caret' }, '>'), ta),
     h('div', { class: 'bar-row' },
-      h('button', { class: 'icon-btn', title: 'Add your own files to the project', onclick: () => pickFiles('', true, addProjectFiles) }, icon('clip')),
+      h('button', { class: 'icon-btn', title: 'Add your own files to the project', onclick: () => pickFiles('', true, addProjectFiles, { direct: true }) }, icon('clip')),
       h('button', { class: 'chipbtn', title: 'Coding model', onclick: (e) => openCodePicker(e.currentTarget) }, modelLogo(m, 'logo-sm'), h('span', { class: 'nm' }, shortName(m)), icon('down')),
       projectChip('code'),
       h('div', { class: 'grow' }), micButton(ta), send,
@@ -4368,4 +4480,4 @@ boot().catch((e) => { document.body.append(h('div', { class: 'err', style: { mar
 
 // Shared with docs.js (Docs Studio).
 const refreshRecents = () => loadConversations().then(renderRecents).catch(() => {});
-export { h, $, $$, icon, S, store, api, toast, errToast, cleanErr, popover, closePop, dialog, field, pickFiles, uploadFiles, downloadBlob, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openLightbox, byId, modelLogo, shortName, refreshRecents };
+export { h, $, $$, icon, S, store, api, toast, errToast, cleanErr, popover, closePop, dialog, field, pickFiles, openAssetPicker, uploadFiles, downloadBlob, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openLightbox, byId, modelLogo, shortName, refreshRecents };
