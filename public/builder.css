@@ -291,3 +291,130 @@
 .va-top .va-file { order: 2; max-width: 340px; }
 /* Video Agent: the microphone sits next to "Write the storyboard". */
 .va-send { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- polish pass: spacing, overlaps and one look for the controls, in both themes. Look only: nothing here changes what a control does. ---------- */
+.vb :is(button, select, input, textarea, [role="button"], [role="switch"]):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* selects: the same arrow and height everywhere instead of each browser's own */
+.vb-select { appearance: none; -webkit-appearance: none; height: 32px; padding: 0 30px 0 10px; text-overflow: ellipsis; cursor: pointer; transition: border-color .15s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a96' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; background-size: 13px; }
+.vb-select:hover, .vb-num:hover, .vb-f textarea:hover { border-color: rgb(var(--ink) / .3); }
+.vb-select:focus, .vb-num:focus, .vb-f textarea:focus { border-color: var(--accent); }
+.vb-select option { background: var(--panel-2); color: var(--text); }
+.vb-num { height: 32px; padding: 0 8px; border-radius: 9px; font-variant-numeric: tabular-nums; transition: border-color .15s; }
+.vb-set b { height: 32px; font-variant-numeric: tabular-nums; }
+
+/* top bar */
+.vb-bar { gap: 10px 16px; padding: 10px 14px; }
+.vb-set { gap: 4px; }
+.vb-lab .info { margin-left: 0; }
+.vb-go { gap: 8px 10px; }
+.vb .btn .info { color: inherit; opacity: .7; margin: 0 -4px 0 -2px; }
+.vb .btn .info:hover, .vb .btn .info:focus-visible { opacity: 1; background: rgb(127 127 127 / .25); }
+.vb .btn.sm .i { width: 15px; height: 15px; flex: none; }
+
+/* scene list */
+.vb-list { container: vblist / inline-size; }
+.vb-head { min-height: 48px; gap: 6px 8px; padding: 9px 12px; }
+.vb-head > b { font-size: 14px; white-space: nowrap; }
+.vb-head .n { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: rgb(var(--ink) / .07); color: var(--muted); font-weight: 600; font-size: 11.5px; text-align: center; font-variant-numeric: tabular-nums; }
+.vb-head .tag { flex: none; white-space: nowrap; }
+.vb-head .btn.sm { padding: 0 10px; gap: 6px; flex: none; }
+/* a narrow list: the two add buttons get their own row instead of sticking out of the box */
+@container vblist (max-width: 348px) {
+  .vb-head { flex-wrap: wrap; }
+  .vb-head .grow { flex: 1 0 100%; height: 0; order: 1; }
+  .vb-head .btn.sm { order: 2; flex: 1 1 0; min-width: 0; }
+}
+.vb-rows { padding: 6px 8px 8px; gap: 3px; }
+.vb-row { gap: 10px; padding: 6px 4px 6px 6px; border-radius: 12px; transition: background .12s, border-color .12s; }
+.vb-row .num { width: 16px; font-variant-numeric: tabular-nums; }
+.vb-row .th { width: 60px; border-radius: 8px; }
+.vb-row .tx { gap: 2px; }
+.vb-row .l1 { min-width: 0; white-space: nowrap; }
+.vb-row .l1 .tag { flex: none; height: 17px; white-space: nowrap; }
+.vb-row .l1 .time { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.vb-row .l1 > .i { flex: none; }
+.vb-row .l2 { font-size: 13px; font-weight: 500; line-height: 1.35; }
+.vb-row .st { display: flex; align-items: center; gap: 5px; min-width: 0; line-height: 1.3; }
+.vb-row .st::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; opacity: .85; }
+.vb-row > .icon-btn { opacity: .65; }
+.vb-row:hover > .icon-btn, .vb-row.on > .icon-btn, .vb-row > .icon-btn:focus-visible { opacity: 1; }
+.vb-pf { margin-top: 2px; padding: 2px 9px; transition: color .12s, border-color .12s; }
+
+/* scene panel: the title stays in view, nothing is squeezed or cut off */
+.vb-panel { gap: 14px; padding-bottom: 16px; }
+.vb-panel > * { flex: none; }
+.vb-panel > :not(.vb-head) { margin: 0 14px; }
+.vb-panel > .vb-head { position: sticky; top: 0; z-index: 2; padding-left: 14px; background: var(--panel); border-radius: 13px 13px 0 0; }
+.vb-panel > .btn.block { width: auto; }
+.vb-f { gap: 6px; }
+.vb-f textarea { line-height: 1.45; min-height: 58px; transition: border-color .15s; }
+.vb-f.two { min-height: 24px; }
+.vb-f > .row-gap { align-items: center; }
+.vb-slider input, .vb-tvol, .vb-th.tools input { cursor: pointer; }
+.vb-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vb-fixed { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#vb-vers > span { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#vb-vers .icon-btn { font-size: 10px; }
+.vb-file .th { border-radius: 8px; }
+.vb-acts { gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.vb-acts .btn.danger { margin-left: auto; }
+.vb .btn.danger:hover, .dlg-box .btn.danger:hover { background: color-mix(in srgb, var(--danger) 14%, var(--panel-3)); }
+
+/* preview */
+.vb-ctl { gap: 6px 8px; padding: 8px 12px; min-height: 50px; }
+.vb-clock { margin-left: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vb-note { line-height: 1.35; }
+#vb-play { min-width: 88px; }
+/* drawn icons in place of text symbols, which every system showed differently */
+#vb-prev, #vb-next, #vb-snap { font-size: 0; }
+#vb-prev::before, #vb-next::before, #vb-snap::before { content: ''; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; }
+#vb-prev { --m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 19 9 12l10-7v14zM5 19V5'/%3E%3C/svg%3E"); }
+#vb-next { --m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 5 10 7-10 7V5zM19 5v14'/%3E%3C/svg%3E"); }
+#vb-snap { --m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15'/%3E%3Cpath d='m5 8 4 4M12 15l4 4'/%3E%3C/svg%3E"); }
+#vb-snap::before { width: 14px; height: 14px; }
+
+/* the bar for a selected part */
+.vb-rbar { gap: 8px; padding: 7px 12px; min-height: 46px; }
+.vb-rbar .vb-hint { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; line-height: 1.35; }
+.vb-rbar #vb-in, .vb-rbar #vb-out { border-color: var(--line-2); padding: 0 11px; font-variant-numeric: tabular-nums; }
+.vb-rbar #vb-in { border-radius: 9px 0 0 9px; }
+.vb-rbar #vb-out { border-radius: 0 9px 9px 0; margin-left: -9px; }
+.vb-rbar .vb-rlab { color: var(--muted); }
+
+/* timeline */
+.vb-th { padding: 0 6px 0 10px; }
+.vb-th .info { margin-left: 0; }
+.vb-th b { white-space: nowrap; }
+.vb-th.tools { padding: 0 6px; background: rgb(var(--ink) / .025); }
+.vb-th.tools .icon-btn.sm { font-size: 15px; line-height: 1; }
+.vb-tvol { width: 44px; flex: none; }
+.vb-ruler { background: rgb(var(--ink) / .025); }
+.vb-ruler .tick { font-variant-numeric: tabular-nums; }
+.vb-clip { transition: box-shadow .12s, border-color .12s; }
+.vb-clip:hover { border-color: rgb(var(--ink) / .32); }
+.vb-clip.on, .vb-clip.on:hover { border-color: var(--accent); }
+.vb-clip.bad, .vb-clip.bad:hover { border-color: var(--danger); }
+.vb-clip .lbl { inset: 0 10px 0 7px; gap: 7px; }
+.vb-clip .lbl b { flex: none; min-width: 18px; height: 18px; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+.vb-clip .lbl i { min-width: 0; color: var(--text-2); }
+.vb-capb .ct { display: block; inset: 50% 7px auto 8px; transform: translateY(-50%); text-overflow: ellipsis; line-height: 1.3; }
+.vb-aud .nm { top: 3px; line-height: 1.5; }
+
+/* laptops with a short screen: lower timeline rows leave more room for the scenes and the preview */
+@media (min-width: 861px) and (max-height: 800px) {
+  .vb-tl { height: 204px; }
+  .vb-th.v, .vb-track.v { height: 52px; } .vb-th.a, .vb-track.a { height: 40px; } .vb-th.c, .vb-track.c { height: 34px; }
+  .vb-clip .lbl img { height: 30px; width: 46px; }
+  .vb-capb { top: 5px; bottom: 5px; }
+}
+/* the expand buttons of the scene list and the scene panel sit in their title rows: keep that corner free */
+@media (min-width: 861px) { .vb-list > .vb-head { padding-right: 48px; } }
+@media (min-width: 1181px) { .vb-panel > .vb-head { padding-right: 50px; } }
+/* tablets and small windows: the middle of the screen keeps a usable height and the page scrolls, instead of the preview covering the scene panel */
+@media (min-width: 861px) and (max-width: 1180px) {
+  .vb { overflow-y: auto; }
+  .vb-body { flex: none; height: max(600px, calc(100vh - 420px)); grid-template-rows: minmax(0, 5fr) minmax(0, 6fr); }
+  .vb-rbar, .vb-tl { flex: none; }
+}

@@ -89,8 +89,8 @@ function place() {
 const PANELS = [
   { id: 'vb-panel', sel: '.vb-panel', mq: 1181, top: 8 },
   { id: 'pt-panel', sel: '.pt-panel', mq: 981, top: 8 },
-  { id: 'vb-list', sel: '.vb-list', mq: 861, bottom: 8 },
-  { id: 'vb-tl', sel: '.vb-tl', mq: 861, top: 4, right: 14 },
+  { id: 'vb-list', sel: '.vb-list', mq: 861, top: 9 },
+  { id: 'vb-tl', sel: '.vb-tl', mq: 861, top: 2, right: 2 },
   { id: 'img-edit', sel: '.lightbox.editor > aside', mq: 861, top: 10 },
 ];
 const EXPAND_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';

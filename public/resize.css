@@ -53,4 +53,7 @@ body.pn-open .rz-h { display: none; }
 .lightbox.editor > aside.pn-max { padding: 24px 64px 24px 28px; }
 .lightbox.editor > aside.pn-max .ed-ta { min-height: 160px; font-size: 15px; }
 .vb-tl.pn-max { height: auto; }
-.vb-list.pn-max .vb-head { padding-right: 16px; }
+.vb-list.pn-max .vb-head { padding-right: 64px; }
+/* the timeline's expand button is small enough to stay inside the time ruler */
+.pn-btn[data-panel="vb-tl"] { width: 22px; height: 22px; border-radius: 7px; margin-left: 10px; box-shadow: 0 0 0 3px var(--panel); }
+.pn-btn[data-panel="vb-tl"] svg { width: 12px; height: 12px; }
