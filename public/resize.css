@@ -55,5 +55,5 @@ body.pn-open .rz-h { display: none; }
 .vb-tl.pn-max { height: auto; }
 .vb-list.pn-max .vb-head { padding-right: 64px; }
 /* the timeline's expand button is small enough to stay inside the time ruler */
-.pn-btn[data-panel="vb-tl"] { width: 22px; height: 22px; border-radius: 7px; margin-left: 10px; box-shadow: 0 0 0 3px var(--panel); }
+.pn-btn[data-panel="vb-tl"] { width: 22px; height: 22px; border-radius: 7px; margin-left: 10px; }
 .pn-btn[data-panel="vb-tl"] svg { width: 12px; height: 12px; }

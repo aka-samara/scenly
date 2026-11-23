@@ -324,7 +324,7 @@
 @container vblist (max-width: 348px) {
   .vb-head { flex-wrap: wrap; }
   .vb-head .grow { flex: 1 0 100%; height: 0; order: 1; }
-  .vb-head .btn.sm { order: 2; flex: 1 1 0; min-width: 0; }
+  .vb-head .btn.sm { order: 2; flex: 1 1 auto; }
 }
 .vb-rows { padding: 6px 8px 8px; gap: 3px; }
 .vb-row { gap: 10px; padding: 6px 4px 6px 6px; border-radius: 12px; transition: background .12s, border-color .12s; }
@@ -418,3 +418,20 @@
   .vb-body { flex: none; height: max(600px, calc(100vh - 420px)); grid-template-rows: minmax(0, 5fr) minmax(0, 6fr); }
   .vb-rbar, .vb-tl { flex: none; }
 }
+
+/* second pass */
+/* the timeline's expand button gets its own corner of the time ruler, so no time label shows half hidden behind it */
+@media (min-width: 861px) {
+  .vb-tl { position: relative; }
+  .vb-tl::after { content: ''; position: absolute; top: 0; right: 0; width: 38px; height: 26px; z-index: 5; box-sizing: border-box; pointer-events: none;
+    background: linear-gradient(rgb(var(--ink) / .025), rgb(var(--ink) / .025)), var(--panel); border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0 13px 0 0; }
+}
+/* the button that adds a scene says what it does, so it is not mistaken for the "AI scene" type badges next to it */
+#vb-addai { font-size: 0; }
+#vb-addai::after { content: 'Add AI scene'; font-size: 13px; }
+/* the handles of a selected part sit under the time labels instead of on top of them */
+.vb-ruler .tick { padding-top: 3px; }
+.vb-range .rh { top: 16px; height: 10px; }
+.vb-range .rh.l { border-radius: 0 5px 0 0; } .vb-range .rh.r { border-radius: 5px 0 0 0; }
+/* narrow scene list: the title row is free on the right, so only that row keeps room for the expand button */
+@container vblist (max-width: 348px) { .vb-list > .vb-head { padding-right: 12px; } }
