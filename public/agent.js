@@ -25,7 +25,7 @@ export async function renderAgent() {
       const fd = new FormData(); fd.append('files', picked[0]); files[k] = { name: picked[0].name, busy: true }; drawFiles();
       try { const r = await api('/api/files?audio=1', { method: 'POST', body: fd }); (r.errors || []).forEach((m) => toast(m, 'error')); files[k] = r.files[0] ? { id: r.files[0].id, name: picked[0].name } : null; } catch (err) { files[k] = null; errToast(err); }
       drawFiles();
-    }); } }, icon(ic), label)))) }, icon('plus'), h('span', {}, 'Image / Video / Logo / Voice')),
+    }, { title: label }); } }, icon(ic), label)))) }, icon('plus'), h('span', {}, 'Image / Video / Logo / Voice')),
     ...Object.entries(files).filter(([, f]) => f).map(([k, f]) => h('span', { class: 'va-file', 'data-file': k }, f.busy ? h('span', { class: 'spin' }) : icon(ROLE[k][0]), h('span', {}, `${ROLE[k][1]}: ${f.name}`), h('button', { class: 'icon-btn sm', title: 'Remove', onclick: () => { files[k] = null; drawFiles(); } }, icon('x')))),
     ...(linkOn ? [h('span', { class: 'va-file va-link', 'data-file': 'link' }, icon('link'), link, h('button', { class: 'icon-btn sm', title: 'Remove', onclick: () => { linkOn = false; link.value = ''; drawFiles(); } }, icon('x')))] : []));
   drawFiles();

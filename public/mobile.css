@@ -216,3 +216,18 @@
   /* Character cards: the action row wraps when a narrow card cannot fit Image, Video and the ⋯ button. */
   html body .ch-card .acts { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
 }
+
+/* ---------- phones: the asset picker fills the screen, bigger touch targets (desktop unchanged) ---------- */
+@media (max-width: 640px) {
+  html body .ap-bg { padding: 0; }
+  html body .modal.ap-box { width: 100%; height: 100%; border-radius: 0; border: 0; }
+  html body .ap-drop { flex-direction: column; align-items: stretch; text-align: center; gap: 6px; margin: 12px 12px 0; padding: 12px; }
+  html body .ap-drop .ap-or { display: none; }
+  html body .ap-tools { gap: 10px; padding: 12px 12px 0; }
+  html body .ap-search { flex-basis: 100%; height: 42px; }
+  html body .ap-search input { font-size: 16px; }
+  html body .ap-tools .ap-tabs { flex: 1; overflow-x: auto; }
+  html body .ap-scroll { padding: 12px; }
+  html body .ap-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  html body .ap-foot { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+}
