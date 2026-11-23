@@ -22,6 +22,7 @@ import { securityHeaders, sameOrigin, limit, mountHealth, checkSettings, gracefu
 import { ffmpegInfo } from './ffmpeg.js';
 import { startJobs } from './jobs.js';
 import { mountDownloads, deriveLater } from './downloads.js';
+import { mountCrop } from './crop.js';
 import { mountBuilder } from './builder/routes.js';
 import { mountAssist } from './builder/assist.js';
 import { mountPrecision } from './builder/precision.js';
@@ -78,6 +79,7 @@ app.use('/vendor/hljs.js', express.static(path.join(nm, '@highlightjs/cdn-assets
 app.use('/vendor/hljs-light.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github.min.css'), lib));
 app.use('/vendor/hljs-dark.css', express.static(path.join(nm, '@highlightjs/cdn-assets/styles/github-dark.min.css'), lib));
 app.use('/vendor/builder-plan.js', express.static(path.join(here, 'builder', 'plan.js'))); // the same timeline maths in the browser and on the server
+app.use('/vendor/crop-plan.js', express.static(path.join(here, 'cropplan.js'))); // social-size crop maths, shared with the crop dialog
 // App code must revalidate (cheap 304 via ETag): without this Cloudflare gives browsers a 4 hour cache and a deploy reaches people hours late.
 // Icons, logos and other pictures keep for a day, so a visit does not ask the server for each of them again.
 // Cloudflare may answer for app code from its own copy for one minute (CDN-Cache-Control is read by Cloudflare only),
@@ -836,6 +838,7 @@ app.post('/api/styles/:id/fav', requireUser, (req, res) => {
 mountVoice(app, { requireUser, wrap });
 mountMemory(app, { requireUser, wrap });
 mountDownloads(app, { requireUser, wrap });
+mountCrop(app, { requireUser, wrap });
 mountBuilder(app, { requireUser, requireAdmin, wrap });
 mountAssist(app, { requireUser, wrap });
 mountPrecision(app, { requireUser, wrap });

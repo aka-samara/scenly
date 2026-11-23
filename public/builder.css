@@ -435,3 +435,6 @@
 .vb-range .rh.l { border-radius: 0 5px 0 0; } .vb-range .rh.r { border-radius: 5px 0 0 0; }
 /* narrow scene list: the title row is free on the right, so only that row keeps room for the expand button */
 @container vblist (max-width: 348px) { .vb-list > .vb-head { padding-right: 12px; } }
+
+/* Finished exports on a phone: the Crop for social and Download buttons go under the file details. */
+@media (max-width: 520px) { .vb-ex { flex-wrap: wrap; } .vb-ex .grow { flex-basis: calc(100% - 30px); } .vb-ex .btn { flex: 1; justify-content: center; } }
