@@ -1,0 +1,73 @@
+/* Crop for social (public/crop.js). Loaded only when the crop dialog opens, so nothing else changes. */
+.modal-bg.crop-bg { z-index: 130; } /* above the lightbox it is often opened from */
+.modal.dlg-box.crop-box { width: min(980px, 100%); }
+.crop-box .dlg-body { padding-bottom: 6px; }
+.cr { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.cr-stage { position: relative; height: min(520px, 62vh); border-radius: 14px; overflow: hidden; background: #0b0b12; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
+.cr-stage:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.cr-stage.movable { cursor: grab; }
+.cr-stage.dragging { cursor: grabbing; }
+.cr-vid { position: absolute; display: block; max-width: none; object-fit: fill; pointer-events: none; z-index: 1; }
+.cr-bg { position: absolute; overflow: hidden; z-index: 0; display: none; background: #222; }
+.cr-bg img { width: 100%; height: 100%; object-fit: cover; filter: blur(18px) brightness(.85); transform: scale(1.15); }
+.cr-stage.fit .cr-bg { display: block; }
+/* The frame: everything outside it is dimmed, so the person sees what is cut. */
+.cr-frame { position: absolute; z-index: 2; pointer-events: none; border: 2px solid #fff; border-radius: 3px; box-shadow: 0 0 0 9999px rgba(8, 8, 14, .62); }
+.cr-stage.dragging .cr-frame { box-shadow: 0 0 0 9999px rgba(8, 8, 14, .45); }
+.cr-thirds { position: absolute; inset: 0; opacity: 0; transition: opacity .15s;
+  background: linear-gradient(90deg, transparent calc(33.33% - .5px), rgba(255,255,255,.35) calc(33.33% - .5px), rgba(255,255,255,.35) calc(33.33% + .5px), transparent calc(33.33% + .5px), transparent calc(66.66% - .5px), rgba(255,255,255,.35) calc(66.66% - .5px), rgba(255,255,255,.35) calc(66.66% + .5px), transparent calc(66.66% + .5px)),
+              linear-gradient(180deg, transparent calc(33.33% - .5px), rgba(255,255,255,.35) calc(33.33% - .5px), rgba(255,255,255,.35) calc(33.33% + .5px), transparent calc(33.33% + .5px), transparent calc(66.66% - .5px), rgba(255,255,255,.35) calc(66.66% - .5px), rgba(255,255,255,.35) calc(66.66% + .5px), transparent calc(66.66% + .5px)); }
+.cr-stage.dragging .cr-thirds { opacity: 1; }
+.cr-gv, .cr-gh { position: absolute; background: #04d9ff; opacity: 0; transition: opacity .12s; }
+.cr-gv { left: calc(50% - 1px); top: 0; bottom: 0; width: 2px; }
+.cr-gh { top: calc(50% - 1px); left: 0; right: 0; height: 2px; }
+.cr-stage.dragging .cr-frame.snap-x .cr-gv, .cr-stage.dragging .cr-frame.snap-y .cr-gh { opacity: .9; }
+.cr-hint { position: absolute; z-index: 3; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; background: rgba(0,0,0,.6); color: #fff; font-size: 12.5px; pointer-events: none; white-space: nowrap; }
+.cr-hint[hidden] { display: none; }
+.cr-hint .i { width: 14px; height: 14px; }
+.cr-play { position: absolute; z-index: 3; top: 10px; right: 10px; background: rgba(0,0,0,.55); color: #fff; }
+.cr-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cr-side > .lab { margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.cr-side > .lab:first-child { margin-top: 0; }
+.cr-shapes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.cr-shape { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; min-height: 62px; padding: 8px 2px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font-size: 12.5px; }
+.cr-shape .ratio { display: block; border: 2px solid currentColor; border-radius: 3px; }
+.cr-shape b { font-weight: 600; }
+.cr-shape small { font-size: 9.5px; line-height: 1.1; color: var(--faint); text-align: center; }
+.cr-shape.on { border-color: var(--accent); color: var(--text); background: rgba(67, 97, 238, .14); }
+.cr-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.cr-chip { height: 30px; padding: 0 11px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.cr-chip.on { border-color: var(--accent); color: var(--text); background: rgba(67, 97, 238, .14); }
+.cr-mode { display: flex; width: 100%; }
+.cr-mode button { flex: 1; justify-content: center; }
+.cr-zoom { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.cr-zoom[hidden] { display: none; }
+.cr-zoom .lab { font-size: 12px; color: var(--muted); }
+.cr-zoom input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.cr-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.cr-facts b { color: var(--text); font-weight: 600; }
+.cr-warn { display: flex; gap: 8px; padding: 9px 11px; border-radius: 10px; border: 1px solid rgba(245, 166, 35, .45); background: rgba(245, 166, 35, .1); font-size: 12.5px; line-height: 1.45; }
+.cr-warn[hidden] { display: none; }
+.cr-warn .i { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--warn); }
+.cr-warn a { color: var(--accent); }
+.cr-foot-note { color: var(--faint); font-size: 12px; }
+#cr-dl .cost { display: inline-flex; align-items: center; padding-left: 9px; margin-left: 2px; border-left: 1px solid rgba(255,255,255,.3); font-size: 12px; opacity: .9; }
+
+/* Tablet and phone: the frame on top, options under it, the Download button always in reach. */
+@media (max-width: 860px) {
+  .cr { grid-template-columns: 1fr; gap: 12px; }
+  .cr-stage { height: min(440px, 52vh); }
+}
+@media (max-width: 640px) {
+  .modal.dlg-box.crop-box { height: 100%; max-height: 100%; border-radius: 0; }
+  .crop-box .dlg-body { flex: 1; min-height: 0; overflow: auto; }
+  .cr-stage { height: 50vh; height: 50dvh; border-radius: 12px; }
+  .cr-shape { min-height: 56px; }
+  .cr-presets { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -18px; padding: 0 18px 2px; }
+  .cr-presets::-webkit-scrollbar { display: none; }
+  .cr-chip { height: 34px; flex: none; }
+  .cr-zoom input { height: 28px; }
+  .crop-box .dlg-foot { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  #cr-dl { flex: 1; justify-content: center; height: 44px; }
+  .cr-foot-note { display: none; }
+}

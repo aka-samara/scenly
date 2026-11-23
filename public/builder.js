@@ -1,6 +1,6 @@
 // Video Builder: put clips, pictures and AI scenes in order, add a voice-over, music and captions, then export one video.
 // Loaded only when the Video Builder is switched on. The timeline maths is the same file the server uses for the export.
-import { h, pageCss, $, $$, icon, S, api, toast, errToast, popover, closePop, dialog, field, pickFiles, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles } from './app.js';
+import { h, pageCss, $, $$, icon, S, api, toast, errToast, popover, closePop, dialog, field, pickFiles, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openCrop } from './app.js';
 import { layout, estimate, allowedDuration, sceneCredits, editCredits, curVersion } from './vendor/builder-plan.js';
 
 await pageCss('vb-css', '/builder.css'); // drawn only once its stylesheet is in
@@ -857,6 +857,7 @@ function openExport() {
     hasCaps && h('a', { class: 'btn ghost sm', id: 'vb-srt', href: `/api/builder/projects/${B.id}/captions.srt`, download: '', 'data-plain': '1', onclick: async (e) => { if (B.dirty) { e.preventDefault(); await flush().catch(() => {}); e.target.closest('a').click(); } } }, icon('dl'), 'Download captions (.srt)'),
     done.length > 0 && h('div', { class: 'vb-exports', id: 'vb-exports' }, h('div', { class: 'lab' }, 'Finished exports'), done.map((e) => h('div', { class: 'vb-ex' }, icon(e.audioOnly ? 'audio' : 'film'),
       h('div', { class: 'grow' }, h('b', {}, e.audioOnly ? 'Sound only' : `${e.width}×${e.height}${e.burned ? ' · captions burned in' : ''}`), h('small', {}, `${fmtLen(e.seconds || 0)} · ${fmtSize(e.bytes)} · ${new Date(e.endedAt).toLocaleString()}`)),
+      !e.audioOnly && h('button', { class: 'btn ghost sm', 'data-crop': e.fileId, title: 'Crop it for TikTok, Reels, Shorts, stories and feeds, then download', onclick: () => openCrop(e.fileId, { title: B.p.title }) }, icon('crop'), 'Crop for social'),
       h('button', { class: 'btn sm', onclick: () => downloadFiles([e.fileId]) }, icon('dl'), 'Download')))),
   ], foot: [h('button', { class: 'btn primary', id: 'vb-export-go', onclick: (e) => go(e.currentTarget) }, icon('dl'), 'Export')] });
 }

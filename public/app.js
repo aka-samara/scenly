@@ -68,6 +68,9 @@ const ICONS = {
   wand: '<path d="m15 4 5 5L9 20H4v-5Z"/><path d="M13 6l5 5"/>',
   sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   ratio: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4M17 10v4"/>',
+  crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  target: '<circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5Z"/><path d="m3 13 9 5 9-5"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7Z"/>',
   link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
@@ -1395,6 +1398,7 @@ function openLightbox(item, gen) {
       m && h('div', { class: 'gen-meta' }, h('span', { class: 'meta-chip model' }, modelLogo(m, 'logo-xs'), shortName(m)), gen?.params && paramChips(gen)),
       h('div', { class: 'acts' },
         h('a', { class: 'btn', href: item.url, download: '' }, icon('dl'), 'Download'),
+        isVideo && canCrop(item) && h('button', { class: 'btn', 'data-crop': item.id, title: 'Crop it for TikTok, Reels, Shorts, stories and feeds, then download', onclick: () => openCrop(item.id, { title: item.prompt }) }, icon('crop'), 'Crop for social'),
         h('button', { class: 'btn', onclick: () => { lb.remove(); reusePrompt(gen || { mode: item.type, prompt: item.prompt, model: item.model }); } }, icon('retry'), 'Reuse prompt'),
         !isVideo && h('button', { class: 'btn', onclick: async () => { lb.remove(); await useAsReference(item, 'image'); } }, icon('edit'), 'Edit this image'),
         !isVideo && h('button', { class: 'btn primary', onclick: async () => { lb.remove(); await useAsReference(item, 'video'); } }, icon('play'), 'Animate'),
@@ -2741,6 +2745,7 @@ function assetButtons(x, cls = 'icon-btn sm') {
   return [
     x.type !== 'video' && h('button', { class: cls, title: 'Edit: change it, remove the background, resize, upscale and more', onclick: (e) => { e.stopPropagation(); openEditor(x); } }, icon('edit')),
     (x.appId || x.builderId || (x.prompt && !x.tool && x.type !== 'other')) && h('button', { class: cls, title: x.appId ? 'Open the app it was made in' : x.builderId ? 'Open the video project it was made in' : 'Reuse prompt', onclick: (e) => { e.stopPropagation(); assetReuse(x); } }, icon('retry')),
+    canCrop(x) && h('button', { class: cls, 'data-crop': x.id, title: 'Crop for social and download (TikTok, Reels, Shorts, stories, feeds)', onclick: (e) => { e.stopPropagation(); openCrop(x.id, { title: x.prompt }); } }, icon('crop')),
     h('a', { class: cls, href: x.url, download: '', title: 'Download', onclick: (e) => e.stopPropagation() }, icon('dl')),
   ];
 }
@@ -4483,4 +4488,7 @@ boot().catch((e) => { document.body.append(h('div', { class: 'err', style: { mar
 
 // Shared with docs.js (Docs Studio).
 const refreshRecents = () => loadConversations().then(renderRecents).catch(() => {});
-export { h, $, $$, icon, S, store, api, toast, errToast, cleanErr, popover, closePop, dialog, field, pickFiles, openAssetPicker, uploadFiles, downloadBlob, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openLightbox, byId, modelLogo, shortName, refreshRecents };
+// Crop and download for social sizes (public/crop.js), loaded the first time someone opens it.
+async function openCrop(fileId, opts = {}) { await pageCss('crop-css', '/crop.css'); return (await import('./crop.js')).openCrop(fileId, opts); }
+const canCrop = (x) => !!x && x.type === 'video' && !!x.id && /^\/api\/(media|files)\//.test(x.url || '/api/media/');
+export { h, $, $$, icon, S, store, api, toast, errToast, cleanErr, popover, closePop, dialog, field, pickFiles, openAssetPicker, uploadFiles, downloadBlob, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openLightbox, byId, modelLogo, shortName, refreshRecents, startDownload, addDownload, openCrop, canCrop };

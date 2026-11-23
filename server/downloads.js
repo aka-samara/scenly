@@ -50,6 +50,7 @@ export function removeStored(rec) {
   if (rec.key) remove(rec.key); else { const p = locate(rec); if (p) { fs.rmSync(p, { force: true }); forget(p); } }
   if (rec.posterKey) remove(rec.posterKey);
   if (rec.proxyKey) remove(rec.proxyKey);
+  try { const dir = path.dirname(abs(keys.derived(rec.userId, rec.id, 'x'))); for (const f of fs.readdirSync(dir)) if (f.startsWith('crop-')) fs.rmSync(path.join(dir, f), { force: true }); } catch { /* no crops */ } // social-size crops
 }
 // Optional clean-up, off unless RETENTION_DAYS is set: generated files older than that are removed from storage and Assets.
 export function sweepRetention() {

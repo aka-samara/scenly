@@ -45,7 +45,7 @@ export const FFMPEG_HELP = 'Video tools need ffmpeg on this computer. On a Mac, 
 export class FfmpegError extends Error { constructor(message, detail) { super(message); this.detail = detail; this.status = 500; this.expose = true; } }
 export function needFfmpeg() { if (!ffmpegInfo().ok) { const e = new FfmpegError(FFMPEG_HELP); e.status = 503; e.code = 'ffmpeg_missing'; throw e; } }
 
-function exec(bin, args, { timeoutMs = 10 * 60 * 1000, signal, capture = false, cwd, wantErr = false } = {}) {
+function exec(bin, args, { timeoutMs = 10 * 60 * 1000, signal, capture = false, cwd, wantErr = false, onStderr } = {}) {
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
     const p = spawn(bin, args, { cwd, stdio: ['ignore', capture ? 'pipe' : 'ignore', 'pipe'] });
@@ -56,7 +56,7 @@ function exec(bin, args, { timeoutMs = 10 * 60 * 1000, signal, capture = false, 
     const onAbort = () => { kill('CANCELLED'); finish(reject, new FfmpegError('Stopped.', 'aborted')); };
     if (signal) { if (signal.aborted) return onAbort(); signal.addEventListener('abort', onAbort, { once: true }); }
     if (capture) p.stdout.on('data', (d) => { if (out.length < 4e6) out += d; });
-    p.stderr.on('data', (d) => { err = (err + d).slice(-6000); if (wantErr && full.length < 3e6) full += d; });
+    p.stderr.on('data', (d) => { err = (err + d).slice(-6000); if (onStderr) { try { onStderr(String(d)); } catch { /* a progress callback must not break the run */ } } if (wantErr && full.length < 3e6) full += d; });
     p.on('error', (e) => { log(`SPAWN ERROR ${e.message}`); finish(reject, new FfmpegError(FFMPEG_HELP, e.message)); });
     p.on('close', (code) => {
       log(`${code === 0 ? 'OK' : 'FAIL ' + code} ${Date.now() - t0}ms: ${path.basename(bin)} ${args.join(' ').slice(0, 600)}${code === 0 ? '' : '\n    ' + err.trim().split('\n').slice(-4).join('\n    ')}`);
