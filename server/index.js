@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { serve } from './handover.js'; // must stay before every import that reads the database
 import express from 'express';
 import { mountVoice } from './voice.js';
+import { mountSpeech } from './speech.js';
+import { avatarOn, aiVoiceOn, OMNI_ID } from './byteplus.js';
 import { mountMemory, memoryPrompt, learnFromMessage } from './memory.js';
 import multer from 'multer';
 import fs from 'node:fs';
@@ -169,7 +171,7 @@ function getOrCreateConv(user, cid, firstText, kind) {
 
 // ---------- public config ----------
 app.get('/api/config', (_req, res) => {
-  res.json({ flags: flags(), ffmpeg: ffmpegInfo().ok, uploadLimits: { imageMb: limits().imageMb, videoMb: limits().videoMb, audioMb: limits().audioMb, fileMb: limits().fileMb }, googleLogin: googleReady(), emailConfirm: mailReady(), devAuth: process.env.NODE_ENV !== 'production', supportEmail: process.env.SUPPORT_EMAIL || '', plans: PLANS, packs: PACKS, creditUsd: CREDIT_USD(), markup: MARKUP(), paymentMode: paymentMode(), keyConfigured: !!process.env.AICREDIT_API_KEY, docKinds: kindList(), docFonts: SAFE_FONTS });
+  res.json({ flags: { ...flags(), avatarVideo: avatarOn(), aiVoice: aiVoiceOn() }, ffmpeg: ffmpegInfo().ok, uploadLimits: { imageMb: limits().imageMb, videoMb: limits().videoMb, audioMb: limits().audioMb, fileMb: limits().fileMb }, googleLogin: googleReady(), emailConfirm: mailReady(), devAuth: process.env.NODE_ENV !== 'production', supportEmail: process.env.SUPPORT_EMAIL || '', plans: PLANS, packs: PACKS, creditUsd: CREDIT_USD(), markup: MARKUP(), paymentMode: paymentMode(), keyConfigured: !!process.env.AICREDIT_API_KEY, docKinds: kindList(), docFonts: SAFE_FONTS });
 });
 app.get('/api/models', wrap(async (_req, res) => { const models = await getCatalog(); res.json({ models, aliases: modelAliases() }); }));
 
@@ -332,7 +334,7 @@ app.get('/api/uploads', requireUser, (req, res) => {
   const mine = db.files.filter((f) => f.userId === req.user.id && ['image', 'video', 'audio'].includes(f.kind) && !f.derived && !f.fromMedia && !f.fromUpload).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   for (const f of mine) {
     const dup = `${f.kind}|${f.name}|${f.size}`; if (seen.has(dup)) continue; seen.add(dup);
-    items.push({ id: f.id, type: f.kind, mime: f.mime, size: f.size, name: f.name, prompt: f.name, url: `/api/files/${f.id}/raw`, poster: f.posterKey ? `/api/files/${f.id}/poster` : undefined, duration: f.duration || undefined, createdAt: f.createdAt, origin: 'upload' });
+    items.push({ id: f.id, type: f.kind, mime: f.mime, size: f.size, name: f.name, prompt: f.name, url: `/api/files/${f.id}/raw`, poster: f.posterKey ? `/api/files/${f.id}/poster` : undefined, duration: f.duration || undefined, createdAt: f.createdAt, origin: 'upload', aiVoice: f.aiVoice || undefined });
     if (items.length >= 500) break;
   }
   res.json({ items });
@@ -652,7 +654,11 @@ async function createGeneration(user, { mode, modelId, prompt, fileIds = [], vid
   if (styleId && mode === 'image' && !style) throw new UserError('That style no longer exists. Pick another one.');
   if (style && styleLocked(user, style)) throw new UserError(`${style.name} is part of the full Design Library, which comes with any paid plan or top-up pack.`, 402, 'style_locked');
   if (style?.needsImage && !getFiles(user, fileIds).some((f) => f.kind === 'image') && !characterId) throw new UserError(`${style.name} changes a photo. Add a photo first.`);
-  if (!finalPrompt && !style?.needsImage) throw new UserError(mode === 'video' ? 'Describe the video you want.' : 'Describe the image you want.');
+  // A talking video (OmniHuman): the typed words are what the person says, so they are never rewritten, and with
+  // the person's own sound file they are optional.
+  const avatar = mode === 'video' && (String(modelId) === OMNI_ID || (await findModel(modelId))?.direct === 'omnihuman');
+  if (avatar) enhance = false;
+  if (!finalPrompt && !style?.needsImage && !(avatar && getFiles(user, fileIds).some((f) => f.kind === 'audio'))) throw new UserError(avatar ? 'Type what the person says, or add a sound file of them speaking.' : mode === 'video' ? 'Describe the video you want.' : 'Describe the image you want.');
   const ch = characterId ? userCharacter(user, characterId) : null;
   if (characterId && !ch) throw new UserError('That character no longer exists. Pick another one.');
   let enhanced = null;
@@ -666,7 +672,7 @@ async function createGeneration(user, { mode, modelId, prompt, fileIds = [], vid
   if (ch) {
     const model = await findModel(modelId);
     if (!model || model.type !== mode) throw new UserError(`Pick ${mode === 'video' ? 'a video' : 'an image'} model.`);
-    const locked = applyCharacter(user, ch, { mode, model, fileIds, prompt: finalPrompt });
+    const locked = avatar ? { fileIds: getFiles(user, fileIds).some((f) => f.kind === 'image') ? fileIds : [...getFiles(user, ch.fileIds).filter((f) => f.kind === 'image').slice(0, 1).map((f) => f.id), ...fileIds], prompt: finalPrompt } : applyCharacter(user, ch, { mode, model, fileIds, prompt: finalPrompt });
     if (locked.error) throw new UserError(locked.error);
     displayPrompt ||= enhanced ? undefined : finalPrompt;
     fileIds = locked.fileIds; finalPrompt = locked.prompt;
@@ -836,6 +842,7 @@ app.post('/api/styles/:id/fav', requireUser, (req, res) => {
   res.json({ favs: req.user.styleFavs });
 });
 mountVoice(app, { requireUser, wrap });
+mountSpeech(app, { requireUser, wrap });
 mountMemory(app, { requireUser, wrap });
 mountDownloads(app, { requireUser, wrap });
 mountCrop(app, { requireUser, wrap });
@@ -925,6 +932,13 @@ app.delete('/api/characters/:id', requireUser, (req, res) => {
 });
 
 // Signed public link for reference videos (needed by video-to-video providers).
+// Voice tracks for talking videos: the provider downloads them from here when there is no file bucket.
+app.get('/pa/:fid/:sig.:ext', (req, res) => {
+  const f = db.files.find((x) => x.id === req.params.fid && x.kind === 'audio');
+  if (!f || signFile(f.id) !== req.params.sig) return res.status(404).end();
+  const remote = bucketUrl(filePath(f), { mime: f.mime, inline: true }); if (remote) return res.redirect(302, remote);
+  res.type(f.mime).sendFile(filePath(f));
+});
 app.get('/p/:fid/:sig', (req, res) => {
   const f = db.files.find((x) => x.id === req.params.fid && x.kind === 'video');
   if (!f || signFile(f.id) !== req.params.sig) return res.status(404).end();

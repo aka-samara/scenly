@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { usdToCredits, setDiscounts, markupFor } from './credits.js';
+import { usdToCredits, setDiscounts, markupFor, registerDirect, directMarkup } from './credits.js';
+import { avatarOn, OMNI_ID, OMNI_USD_PER_SECOND, OMNI_AUDIO } from './byteplus.js';
 import { blurbFor, useTagFor } from './blurbs.js';
 import { refusedModels } from './gateway.js';
 
@@ -139,10 +140,37 @@ function build(raw) {
     }
     out.push(model);
   }
+  out.push(...directModels());
   setDiscounts(out);
   const list = dedupe(out);
   const order = { chat: 0, image: 1, video: 2 };
   return list.sort((a, b) => order[a.type] - order[b.type] || a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
+}
+
+// Models Scenly buys straight from the provider. They sit in the same lists as the gateway's models, with the
+// provider's name only (people do not see a separate supplier). Shown only when the feature flag is on and the key is set.
+export function directModels() {
+  const out = [];
+  if (avatarOn()) {
+    registerDirect(OMNI_ID);
+    const usd = OMNI_USD_PER_SECOND();
+    const model = {
+      id: OMNI_ID, name: 'OmniHuman 2.0', type: 'video', provider: 'ByteDance', parent: 'bytedance', direct: 'omnihuman',
+      description: 'Turns one photo of a person and a voice into a talking, moving video with matching lip sync.',
+      short: 'Talking avatar from a photo and a voice', blurb: blurbFor({ id: OMNI_ID, name: 'OmniHuman 2.0' }, 'video'), useTag: useTagFor({ id: OMNI_ID, name: 'OmniHuman 2.0' }, 'video'),
+      caps: ['audio', 'lipsync'], vision: false, pdfInput: false, context: null, discountPct: 0, markup: directMarkup(), constraints: {},
+      price: { creditsPerSecond: { '720p': usdToCredits(usd, OMNI_ID) }, usdPerSecond: { '720p': usd }, official: true },
+      video: {
+        resolutions: ['720p'], ratios: ['adaptive'], durations: [0], // the length follows the voice track, the shape follows the photo
+        textToVideo: false, imageToVideo: true, videoToVideo: false, maxImages: 1, maxVideos: 0, audio: true,
+        avatar: { minSeconds: OMNI_AUDIO.min, maxSeconds: OMNI_AUDIO.max, maxAudioMb: OMNI_AUDIO.maxMb },
+        tasks: ['create'],
+      },
+      tag: '🗣️ Talking Avatar · Lip Sync',
+    };
+    out.push(model);
+  }
+  return out;
 }
 
 // The gateway sometimes lists one model under two ids (a dated snapshot such as claude-opus-5-202609, or an

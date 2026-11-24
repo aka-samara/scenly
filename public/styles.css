@@ -1486,3 +1486,26 @@ body:has(.lightbox) .popover { z-index: 130; }
 .ap-from .i { width: 12px; height: 12px; }
 .ap-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); }
 .ap-foot .grow { color: var(--muted); font-size: 13.5px; }
+
+/* ---------- AI voice picker (talking videos, AI Voice) ---------- */
+.mat.voice { display: grid; place-items: center; color: var(--accent); }
+.mat.voice > .i { width: 22px; height: 22px; margin-bottom: 10px; }
+.mat.voice .lbl { color: #fff; text-transform: none; font-weight: 600; }
+.voice-menu { width: 330px; max-width: calc(100vw - 32px); }
+.vmenu { display: flex; flex-direction: column; gap: 6px; }
+.vmenu .vsearch { height: 34px; margin: 2px 4px 0; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 13px; outline: 0; }
+.vmenu .vsearch:focus { border-color: rgba(67,97,238,.5); }
+.vlist { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; }
+.vrow { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 9px; }
+.vrow:hover { background: rgb(var(--ink) / .05); }
+.vrow.sel { background: rgba(67,97,238,.08); }
+.vrow .vpick { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: 6px 4px; text-align: left; }
+.vrow .vpick b { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.vrow .vpick small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.vrow .chk { color: var(--accent); margin-right: 6px; }
+.vsample.on { color: var(--accent); background: rgba(67,97,238,.12); }
+.vspeed { display: flex; align-items: center; gap: 10px; padding: 6px 6px 0; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.vspeed .opts { display: flex; gap: 4px; flex: 1; }
+.vspeed .opt { flex: 1; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text-2); font-size: 12px; }
+.vspeed .opt.on { border-color: rgba(67,97,238,.5); color: var(--accent); }
+.vmenu .set-note { margin: 2px 6px 4px; font-size: 11.5px; color: var(--faint); line-height: 1.4; }

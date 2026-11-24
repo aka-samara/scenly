@@ -75,6 +75,7 @@ const BLURBS = {
   seedance25260628: 'Long 30s clips with sound, fixed version',
   seedance251080p: 'Final 1080p clips up to 30s, with sound',
   seedance25vision1080p: 'Edit or extend videos in 1080p, with sound',
+  omnihuman20: 'A photo that talks: lip-synced avatar from a voice or script',
 };
 
 const key = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -101,7 +102,7 @@ const TAGS = {
   dreaminaseedance20: 'Video with sound', doubaoseedance20: 'Social and ads', doubaoseedance20fast: 'Fast drafts',
   doubaoseedance20mini: 'Quick previews', doubaoseedance25: 'Best quality', doubaoseedance25vision: 'Video editing',
   dreaminaseedance25global: 'Long clips', seedance25260628: 'Long clips', seedance251080p: 'Full HD',
-  seedance25vision1080p: 'Video editing',
+  seedance25vision1080p: 'Video editing', omnihuman20: 'Talking avatars',
 };
 const TAG_FALLBACK = { chat: 'Chat', image: 'Images', video: 'Video' };
 

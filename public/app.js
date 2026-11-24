@@ -458,9 +458,29 @@ const imageCreditsFor = (m, size, quality) => { const row = m?.price?.creditsByS
 const batchOptions = (m) => [1, 2, 3, 4, 6, 8, 10, 15].filter((n) => n <= (m?.image ? Math.max(4, Math.min(15, m.image.maxN || 1)) : 4));
 // "2K", "3K" and "4K" let the model pick the shape at that resolution; everything else is width x height.
 const sizeLabel = (s) => { const d = /^(\d+)x(\d+)$/.exec(s); if (!d) return { icon: '1:1', name: s === 'auto' ? 'Auto' : `${s} · auto shape`, px: s === 'auto' ? 'Matches the picture' : `${s} resolution` }; const w = Number(d[1]), hh = Number(d[2]); return { icon: `${w}:${hh}`, name: w === hh ? 'Square' : w > hh ? 'Landscape' : 'Portrait', px: `${w} × ${hh}` }; };
+// Talking videos (OmniHuman): a photo plus a voice. The voice is a sound file, or the typed words read by an AI voice.
+const isAvatar = (m) => !!m?.video?.avatar;
+const voiceRef = (st) => st.refs.find((r) => r.kind === 'audio');
+const TTS_CHAR_CREDITS = () => S.voices?.creditsPerChar ?? 0.021;
+// Seconds of video: the sound file's length, or the script at about 15 characters a second.
+function avatarSeconds(st, text = $('#prompt')?.value || S.draft.video || '') {
+  const a = voiceRef(st);
+  if (a) return Math.max(4, Math.ceil(a.duration || 30));
+  return Math.max(4, Math.ceil(String(text).trim().length / 15 / (Number(st.speed) || 1)));
+}
+function avatarCredits(m, st, text = $('#prompt')?.value || S.draft.video || '') {
+  const per = m.price.creditsPerSecond['720p'] ?? Object.values(m.price.creditsPerSecond)[0] ?? 0;
+  return per * avatarSeconds(st, text) + (voiceRef(st) ? 0 : String(text).trim().length * TTS_CHAR_CREDITS());
+}
+async function loadVoices() {
+  if (S.voices || !S.config.flags?.aiVoice) return S.voices;
+  try { S.voices = await api('/api/voice/voices'); } catch { S.voices = null; }
+  return S.voices;
+}
 function estimate(mode) {
   const m = studioModel(mode); const st = S.studio[mode]; if (!m) return 0;
   if (mode === 'image') return imageCreditsFor(m, st.size, st.quality) * st.count;
+  if (isAvatar(m)) return avatarCredits(m, st);
   const per = m.price.creditsPerSecond[st.resolution] ?? Object.values(m.price.creditsPerSecond)[0] ?? 0;
   return per * (st.duration > 0 ? st.duration : 10) * st.count;
 }
@@ -923,7 +943,7 @@ function renderLanding() {
   const holder = { chat: 'Ask anything', image: 'Describe the image you want', video: 'Describe the scene for your video', code: 'Describe what to build' };
   const ta = h('textarea', { id: 'lp-prompt', rows: 2, placeholder: holder[mode] });
   const chosen = { ...(intent.get()?.modelId ? { [intent.get().mode || 'chat']: intent.get().modelId } : {}) };
-  const modelsFor = (k) => (k === 'code' ? codeModels() : S.models.filter((x) => x.type === k && !(k === 'video' && !x.video?.textToVideo && !x.video?.imageToVideo)));
+  const modelsFor = (k) => (k === 'code' ? codeModels() : S.models.filter((x) => x.type === k && !(k === 'video' && ((!x.video?.textToVideo && !x.video?.imageToVideo) || x.video?.avatar))));
   const current = () => byId(chosen[mode]) || (mode === 'code' ? codeModel() : mode === 'chat' ? chatModel() : studioModel(mode));
   const chip = h('button', { class: 'chipbtn lp-model-chip', title: 'Choose a model', onclick: (e) => pickModel(e.currentTarget) });
   const drawChip = () => { const m = current(); chip.replaceChildren(...(m ? [modelLogo(m, 'logo-sm'), h('span', { class: 'nm' }, shortName(m))] : [h('span', { class: 'nm' }, 'Choose a model')]), icon('down')); };
@@ -1028,6 +1048,7 @@ function renderShell() {
         navLink('#/chat', 'chat', 'chat', 'Chat'),
         navLink('#/image', 'image', 'image', 'Image'),
         navLink('#/video', 'video', 'video', S.config.flags?.videoBuilder || S.config.flags?.videoAgent ? 'Video Studio' : 'Video'),
+        S.config.flags?.aiVoice && navLink('#/voice', 'voice', 'mic', 'AI Voice'),
         S.config.flags?.videoAgent && S.config.flags?.videoBuilder && navLink('#/agent', 'agent', 'sparkle', 'Video Agent', paidTag()),
         S.config.flags?.videoBuilder && navLink('#/builder', 'builder', 'film', 'Video Builder', paidTag()),
         S.config.flags?.studioPro && navLink('#/pro', 'pro', 'wand', 'Studio Pro', paidTag()),
@@ -1182,7 +1203,7 @@ export function pageCss(id, href) {
 function warmPageCss() {
   if (warmPageCss.done || !S.user) return; warmPageCss.done = true;
   const f = S.config?.flags || {};
-  const list = [f.videoBuilder && '/builder.css', f.studioPro && '/pro.css'].filter(Boolean);
+  const list = [f.videoBuilder && '/builder.css', f.studioPro && '/pro.css', f.aiVoice && '/aivoice.css'].filter(Boolean);
   const go = () => list.forEach((href) => document.head.append(h('link', { rel: 'preload', as: 'style', href })));
   (window.requestIdleCallback || ((cb) => setTimeout(cb, 1500)))(go, { timeout: 3000 });
 }
@@ -1226,6 +1247,7 @@ async function route() {
   if ((section === 'ads' || section === 'pro') && S.config.flags?.studioPro) window.__pmRecents();
   if (section === 'ads' && S.config.flags?.studioPro) { const m = await import('./pro.js'); return m.renderPro('ads', hash.split('/')[2] || ''); }
   if (section === 'pro' && S.config.flags?.studioPro) { const m = await import('./pro.js'); return m.renderPro(hash.split('/')[2] || '', hash.split('/')[3] || ''); }
+  if (section === 'voice' && S.config.flags?.aiVoice) { await loadVoices(); const m = await import('./aivoice.js'); return m.renderVoice(); }
   if (section === 'assets') return renderAssets();
   if (section === 'help') { const m = await import('./help.js'); return m.renderHelp(hash.split('/')[2] || '', hash.split('/')[3] || ''); }
   if (section === 'billing') return renderBilling();
@@ -1236,9 +1258,9 @@ async function route() {
 }
 
 // ---------- uploads ----------
-async function uploadFiles(files) {
+async function uploadFiles(files, { audio = false } = {}) {
   const fd = new FormData(); files.forEach((f) => fd.append('files', f));
-  const r = await api('/api/files', { method: 'POST', body: fd });
+  const r = await api(audio ? '/api/files?audio=1' : '/api/files', { method: 'POST', body: fd });
   r.errors.forEach((e) => toast(e, 'error'));
   return r.files;
 }
@@ -1951,7 +1973,9 @@ function buildStudioBar(mode) {
   const look = mode === 'image' ? curStyle() : null;
   if (mode === 'image' && st.styleId && S.styles && (!look || look.locked)) { st.styleId = ''; st.styleVar = ''; }
   const task = mode === 'video' ? videoTask() : null;
-  const ph = mode === 'video'
+  const avatar = mode === 'video' && isAvatar(m);
+  const ph = avatar ? (voiceRef(st) ? 'Optional: how they move and where they are (for example: smiles, talks to camera, in a bright studio)' : 'Type what the person says. Or add a recording of their voice.')
+    : mode === 'video'
     ? (task === 'edit' ? 'Add a video, then say what to change: restyle it, replace or remove something' : task === 'extend' ? 'Add a video, then describe what happens next' : 'Describe the video you want to create')
     : look?.needsImage ? `${look.name}: add a photo, then press Generate. Extra details are optional.` : 'Describe the scene you want to generate';
   const ta = h('textarea', { id: 'prompt', rows: 2, placeholder: ph });
@@ -1968,12 +1992,13 @@ function buildStudioBar(mode) {
     h('button', { class: 'chipbtn', id: 'model-chip', title: 'Model', onclick: (e) => openModelMenu(e.currentTarget, mode) }, modelLogo(m, 'logo-sm'), h('span', { class: 'nm' }, shortName(m), mode === 'video' && m.video.tasks.length > 1 && h('span', { class: 'task' }, ' · ' + TASKS[task][0])), icon('down')),
     h('button', { class: 'chipbtn', id: 'set-chip', title: 'Settings', onclick: (e) => openSettings(e.currentTarget, mode) }, icon('ratio'), h('span', { class: 'nm', id: 'set-sum' }, settingsSummary(mode))),
     mode === 'image' && styleChip(),
+    avatar && !voiceRef(st) && S.config.flags?.aiVoice && voiceChip(mode),
     characterChip(mode),
     projectChip('studio'),
     more,
     h('div', { class: 'grow' }),
     micButton(ta),
-    h('div', { class: 'split' + (st.autoEnhance ? ' on' : ''), id: 'enh-split', title: st.autoEnhance ? 'Auto-enhance is on: every prompt is improved by AI before it is generated. Open the arrow to turn it off.' : '' },
+    !avatar && h('div', { class: 'split' + (st.autoEnhance ? ' on' : ''), id: 'enh-split', title: st.autoEnhance ? 'Auto-enhance is on: every prompt is improved by AI before it is generated. Open the arrow to turn it off.' : '' },
       h('button', { class: 'icon-btn', id: 'enh-now', title: ENH_TIP, onclick: () => enhanceNow(mode) }, icon('sparkle')),
       h('button', { class: 'enh-auto', id: 'enh-auto', hidden: !st.autoEnhance, title: 'Auto-enhance is on. Click to turn it off.', onclick: () => setAutoEnhance(mode, false) }, 'Auto'),
       h('button', { class: 'icon-btn caret', id: 'enh-menu', title: 'Prompt enhancer options', onclick: (e) => openEnhMenu(e.currentTarget.parentElement, mode) }, icon('down')),
@@ -2037,6 +2062,12 @@ function costBreakdown(mode) {
   const total = fmtCredits(estimate(mode));
   const n = st.count;
   if (mode === 'image') return `${fmtCredits(imageCreditsFor(m, st.size, st.quality))} credits × ${n} image${n > 1 ? 's' : ''} = about ${total} credits. You are charged the real cost when each image is done. Failed ones are refunded.`;
+  if (isAvatar(m)) {
+    const secs = avatarSeconds(st); const per = m.price.creditsPerSecond['720p'] || 0; const text = ($('#prompt')?.value || '').trim();
+    return voiceRef(st)
+      ? `${secs}s of video (the length of your voice) × ${fmtCredits(per)} credits/s = about ${total} credits. Reserved when you press Generate, refunded if it fails.`
+      : `About ${secs}s of speech from your ${text.length.toLocaleString()} characters: the voice-over is ${fmtCredits(text.length * TTS_CHAR_CREDITS())} credits and the video ${fmtCredits(per)} credits/s, about ${total} credits in all. The exact length is known once the voice is made. A failed video is refunded; the voice-over stays in your files.`;
+  }
   const per = m.price.creditsPerSecond[st.resolution] ?? Object.values(m.price.creditsPerSecond)[0] ?? 0;
   const secs = st.duration > 0 ? st.duration : 10;
   return `${st.duration > 0 ? secs + 's' : 'about ' + secs + 's (follows your video)'} × ${st.resolution} at ${fmtCredits(per)} credits/s × ${n} video${n > 1 ? 's' : ''} = about ${total} credits. Reserved when you press Generate, settled to the real cost when done. Failed ones are refunded.`;
@@ -2048,6 +2079,52 @@ function modeChip(mode) {
   return h('button', { class: 'chipbtn', id: 'mode-chip', onclick: (e) => popover(e.currentTarget, h('div', { class: 'menu', style: { minWidth: '170px' } },
     ['image', 'video', 'chat'].map((k) => h('button', { onclick: () => { closePop(); if (k !== mode) { if (S.draft[mode] && k !== 'chat') S.draft[k] = S.draft[k] || S.draft[mode]; location.hash = '#/' + k; } } }, icon(labels[k][0]), labels[k][1], k === mode && icon('check', 'chk'))),
   ), 'above') }, icon(labels[mode][0]), h('span', { class: 'nm' }, labels[mode][1]), icon('down'));
+}
+
+// The AI voice that reads the script of a talking video. Each voice has a short sample to listen to.
+function voiceChip(mode) {
+  const st = S.studio[mode];
+  const cur = () => S.voices?.voices?.find((v) => v.id === st.voiceId) || S.voices?.voices?.find((v) => v.id === S.voices?.defaultVoice);
+  const chip = h('button', { class: 'chipbtn voice-chip', id: 'voice-chip', title: 'The voice that reads your words', onclick: (e) => openVoiceMenu(e.currentTarget, mode) }, icon('mic'), h('span', { class: 'nm' }, cur()?.name || 'Voice'), icon('down'));
+  if (!S.voices) loadVoices().then(() => { const n = chip.querySelector('.nm'); if (n) n.textContent = cur()?.name || 'Voice'; });
+  return chip;
+}
+let SAMPLE_AUDIO = null;
+function playSample(vid, btn) {
+  if (SAMPLE_AUDIO) { SAMPLE_AUDIO.pause(); $$('.vsample.on').forEach((b) => b.classList.remove('on')); if (SAMPLE_AUDIO.dataset.vid === vid) { SAMPLE_AUDIO = null; return; } }
+  SAMPLE_AUDIO = new Audio('/api/voice/sample/' + encodeURIComponent(vid)); SAMPLE_AUDIO.dataset.vid = vid;
+  btn?.classList.add('on'); SAMPLE_AUDIO.onended = () => btn?.classList.remove('on');
+  SAMPLE_AUDIO.play().catch(() => { btn?.classList.remove('on'); toast('This sample could not be played right now.'); });
+}
+// A list of voices to pick from, grouped by accent, with a play button and speed. Used by Video Studio and the AI voice tool.
+function voiceList({ value, speed = 1, onPick, onSpeed }) {
+  const vs = S.voices?.voices || [];
+  const q = h('input', { placeholder: 'Search voices', class: 'vsearch', oninput: () => draw() });
+  const list = h('div', { class: 'vlist' });
+  const draw = () => {
+    const t = q.value.trim().toLowerCase(); const groups = new Map();
+    for (const v of vs) { if (t && !`${v.name} ${v.accent} ${v.style} ${v.gender}`.toLowerCase().includes(t)) continue; if (!groups.has(v.accent)) groups.set(v.accent, []); groups.get(v.accent).push(v); }
+    list.replaceChildren(...[...groups].flatMap(([acc, arr]) => [h('div', { class: 'menu-cap' }, acc + ' accent'), ...arr.map((v) => h('div', { class: 'vrow' + (v.id === value ? ' sel' : ''), 'data-voice': v.id },
+      h('button', { class: 'icon-btn sm vsample', title: `Hear ${v.name}`, onclick: (e) => { e.stopPropagation(); playSample(v.id, e.currentTarget); } }, icon('play')),
+      h('button', { class: 'vpick', onclick: () => onPick(v) }, h('b', {}, v.name), h('small', {}, `${v.gender === 'female' ? 'Female' : 'Male'} · ${v.style}`)),
+      v.id === value && icon('check', 'chk')))]));
+    if (!list.children.length) list.append(h('div', { class: 'empty' }, 'No voices match'));
+  };
+  draw();
+  const speeds = [[0.85, 'Slower'], [1, 'Normal'], [1.15, 'Faster']];
+  return h('div', { class: 'vmenu' }, q, list,
+    onSpeed && h('div', { class: 'vspeed' }, h('span', {}, 'Speed'), h('div', { class: 'opts' }, speeds.map(([n, l]) => h('button', { class: 'opt' + (Math.abs((speed || 1) - n) < 0.01 ? ' on' : ''), onclick: (e) => { onSpeed(n); e.currentTarget.parentElement.querySelectorAll('.opt').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); } }, l)))),
+    h('p', { class: 'set-note' }, 'Every voice speaks the language you type in. Add tags like [happy], [whispering] or [laughs] to direct the delivery.'));
+}
+async function openVoiceMenu(anchor, mode) {
+  const st = S.studio[mode];
+  if (!S.voices) { await loadVoices(); if (!S.voices?.voices?.length) return toast('AI voices are not available right now.', 'error'); }
+  popover(anchor, h('div', { class: 'menu voice-menu' },
+    h('div', { class: 'menu-head' }, 'VOICE', info('The person in your photo says your words in this voice. You can also add a recording of their real voice instead.')),
+    voiceList({ value: st.voiceId || S.voices.defaultVoice, speed: st.speed || 1, onPick: (v) => { closePop(); SAMPLE_AUDIO?.pause(); st.voiceId = v.id; saveStudio(mode); renderStudioBar(mode); }, onSpeed: (n) => { st.speed = n; saveStudio(mode); updateGo(); } }),
+    h('hr'),
+    h('button', { class: 'mopt-plain', onclick: () => { closePop(); SAMPLE_AUDIO?.pause(); pickFiles('audio/*,.mp3,.wav,.m4a', false, (f) => addStudioRefs(mode, f)); } }, icon('upload'), 'Use a recording of their voice instead'),
+  ), 'above');
 }
 
 function normaliseSettings(mode) {
@@ -2067,8 +2144,10 @@ function normaliseSettings(mode) {
     // Create starts from words or one picture. Edit and Extend work on one video.
     const imgs = st.refs.filter((r) => r.kind === 'image').slice(0, v.imageToVideo && task === 'create' ? v.maxImages || 1 : 0);
     const vids = st.refs.filter((r) => r.kind === 'video').slice(0, v.videoToVideo ? v.maxVideos || 1 : 0);
-    if (imgs.length + vids.length < st.refs.length) toast(task === 'edit' ? 'Edit video works on one video, so the picture was removed.' : `Some references were removed: ${shortName(m)} does not accept them.`);
-    st.refs = [...imgs, ...vids];
+    const auds = st.refs.filter((r) => r.kind === 'audio').slice(0, v.avatar ? 1 : 0);
+    if (imgs.length + vids.length + auds.length < st.refs.length) toast(task === 'edit' ? 'Edit video works on one video, so the picture was removed.' : `Some references were removed: ${shortName(m)} does not accept them.`);
+    st.refs = [...imgs, ...vids, ...auds];
+    if (v.avatar) { st.count = 1; if (!st.speed) st.speed = 1; }
     if (!v.videoToVideo) st.videoUrl = '';
   }
 }
@@ -2076,6 +2155,7 @@ function normaliseSettings(mode) {
 function settingsSummary(mode) {
   const st = S.studio[mode];
   if (mode === 'image') return `${st.size.replace('x', '×')}${studioModel('image')?.image.qualities?.length ? ' · ' + st.quality : ''} · ×${st.count}`;
+  if (isAvatar(studioModel(mode))) { const a = voiceRef(st); return `Photo shape · 720p · ${a ? (a.duration ? Math.round(a.duration) + 's' : 'voice length') : 'voice length'}`; }
   return `${st.ratio === 'adaptive' ? 'Auto' : st.ratio} · ${st.resolution} · ${st.duration > 0 ? st.duration + 's' : 'auto'} · ×${st.count}`;
 }
 
@@ -2085,7 +2165,10 @@ function drawMats(mode) {
   const task = mode === 'video' ? videoTask() : null;
   const needVideo = task === 'edit' || task === 'extend';
   const accepts = mode === 'image' ? !!m.image.edit : needVideo ? m.video.videoToVideo || task === 'extend' : m.video.imageToVideo || m.video.videoToVideo;
-  const kids = st.refs.map((r) => h('div', { class: 'mat' + (r.loading ? ' loading' : '') },
+  const kids = st.refs.map((r) => r.kind === 'audio' ? h('div', { class: 'mat doc voice' + (r.loading ? ' loading' : ''), title: r.name },
+    icon('audio'), r.loading && h('span', { class: 'spin', style: { position: 'absolute', inset: 0, margin: 'auto' } }),
+    h('span', { class: 'lbl' }, r.duration ? `Voice · ${Math.round(r.duration)}s` : 'Voice'),
+    h('button', { class: 'x', title: 'Remove', onclick: () => { st.refs = st.refs.filter((x) => x !== r); renderStudioBar(mode); } }, icon('x'))) : h('div', { class: 'mat' + (r.loading ? ' loading' : '') },
     r.kind === 'video' ? h('video', { src: refThumb(r), muted: true, preload: 'metadata' }) : h('img', { src: refThumb(r), alt: '' }),
     r.loading && h('span', { class: 'spin', style: { position: 'absolute', inset: 0, margin: 'auto' } }),
     h('span', { class: 'lbl' }, r.kind === 'video' ? 'Video' : 'Image'),
@@ -2094,8 +2177,10 @@ function drawMats(mode) {
   if (st.videoUrl) kids.push(h('div', { class: 'mat doc', title: st.videoUrl }, icon('link'), h('span', { class: 'lbl' }, 'Link'), h('button', { class: 'x', onclick: () => { st.videoUrl = ''; drawMats(mode); updateGo(); } }, icon('x'))));
   const room = mode === 'image' ? (m.image.edit?.max_images || 0) - st.refs.length
     : needVideo ? (m.video.maxVideos || 1) - st.refs.length - (st.videoUrl ? 1 : 0)
-      : (m.video.imageToVideo ? m.video.maxImages : 0) + (m.video.videoToVideo ? m.video.maxVideos : 0) - st.refs.length - (st.videoUrl ? 1 : 0);
-  if (accepts && room > 0) kids.push(h('button', { class: 'mat-add' + (needVideo ? ' need' : ''), id: 'mat-add', title: needVideo ? 'Add the video to work on' : 'Add a reference', onclick: (e) => openMaterialMenu(e.currentTarget, mode) }, h('div', {}, icon(needVideo ? 'video' : 'plus'), needVideo ? 'Video' : 'Reference')));
+      : isAvatar(m) ? (st.refs.some((r) => r.kind === 'image') ? 0 : 1) + (voiceRef(st) ? 0 : 1)
+        : (m.video.imageToVideo ? m.video.maxImages : 0) + (m.video.videoToVideo ? m.video.maxVideos : 0) - st.refs.length - (st.videoUrl ? 1 : 0);
+  const noPhoto = isAvatar(m) && !st.refs.some((r) => r.kind === 'image') && !st.characterId;
+  if (accepts && room > 0) kids.push(h('button', { class: 'mat-add' + (needVideo || noPhoto ? ' need' : ''), id: 'mat-add', title: needVideo ? 'Add the video to work on' : noPhoto ? 'Add a photo of the person who talks' : isAvatar(m) ? 'Add a voice recording (optional)' : 'Add a reference', onclick: (e) => openMaterialMenu(e.currentTarget, mode) }, h('div', {}, icon(needVideo ? 'video' : noPhoto ? 'face' : 'plus'), needVideo ? 'Video' : noPhoto ? 'Photo' : isAvatar(m) ? 'Voice' : 'Reference')));
   box.replaceChildren(...kids);
   box.style.display = kids.length ? '' : 'none';
 }
@@ -2108,6 +2193,15 @@ function openMaterialMenu(anchor, mode) {
   const nImg = st.refs.filter((r) => r.kind === 'image').length, nVid = st.refs.filter((r) => r.kind === 'video').length + (st.videoUrl ? 1 : 0);
   const canImg = mode === 'image' || (v.imageToVideo && task === 'create' && nImg < (v.maxImages || 1));
   const canVid = !!v?.videoToVideo && nVid < (v.maxVideos || 1);
+  if (isAvatar(m)) {
+    const canAud = !voiceRef(st);
+    return popover(anchor, h('div', { class: 'menu' },
+      canImg && h('button', { onclick: () => { closePop(); pickFiles('image/*', false, (f) => addStudioRefs(mode, f), { direct: true }); } }, icon('upload'), 'Upload a photo of the person'),
+      canAud && h('button', { id: 'mat-voice', onclick: () => { closePop(); pickFiles('audio/*,.mp3,.wav,.m4a', false, (f) => addStudioRefs(mode, f), { direct: true }); } }, icon('audio'), 'Upload their voice (MP3 or WAV)'),
+      h('hr'),
+      h('button', { id: 'mat-assets', onclick: () => { closePop(); openAssetPicker({ accept: [canImg && 'image/*', canAud && 'audio/*'].filter(Boolean).join(','), multiple: false, kinds: [canImg && 'image', canAud && 'audio'].filter(Boolean), title: canImg && canAud ? 'Add a photo or a voice' : canImg ? 'Add a photo' : 'Add a voice', onFiles: (f) => addStudioRefs(mode, f) }); } }, icon('folder'), 'From my assets'),
+    ), 'above');
+  }
   popover(anchor, h('div', { class: 'menu' },
     canImg && h('button', { onclick: () => { closePop(); pickFiles('image/*', true, (f) => addStudioRefs(mode, f), { direct: true }); } }, icon('upload'), 'Upload image'),
     canVid && h('button', { onclick: () => { closePop(); pickFiles('video/mp4,video/quicktime,video/webm', false, (f) => addStudioRefs(mode, f), { direct: true }); } }, icon('video'), 'Upload video'),
@@ -2121,17 +2215,23 @@ async function addStudioRefs(mode, files) {
   const st = S.studio[mode]; const m = studioModel(mode);
   const v = mode === 'video' ? m.video : null;
   const task = mode === 'video' ? videoTask() : null;
-  const ok = files.filter((f) => (f.type.startsWith('image/') && (mode === 'image' ? m.image.edit : v.imageToVideo && task === 'create')) || (f.type.startsWith('video/') && v?.videoToVideo));
+  const isAud = (f) => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(f.name || '') || f.assetKind === 'audio';
+  const ok = files.filter((f) => (isAud(f) ? !!v?.avatar : (f.type.startsWith('image/') && (mode === 'image' ? m.image.edit : v.imageToVideo && task === 'create')) || (f.type.startsWith('video/') && v?.videoToVideo)));
   if (!ok.length) return toast(task === 'edit' || task === 'extend' ? 'This task works on a video. Add an .mp4 or .mov file, or switch the task to Create to use a picture.' : mode === 'video' && !v.videoToVideo ? `${shortName(m)} takes image references only.` : `${shortName(m)} does not take this kind of reference.`, 'error');
-  const pending = ok.map((f) => ({ tmp: Math.random().toString(36).slice(2), name: f.name, kind: f.type.startsWith('video/') ? 'video' : 'image', preview: URL.createObjectURL(f), loading: true }));
+  const pending = ok.map((f) => ({ tmp: Math.random().toString(36).slice(2), name: f.name, kind: isAud(f) ? 'audio' : f.type.startsWith('video/') ? 'video' : 'image', preview: URL.createObjectURL(f), loading: true }));
+  // A new voice replaces the old one; its length is read in the browser so the price is right before it is sent.
+  if (pending.some((p) => p.kind === 'audio')) st.refs = st.refs.filter((r) => r.kind !== 'audio');
+  if (pending.some((p) => p.kind === 'image') && v?.avatar) st.refs = st.refs.filter((r) => r.kind !== 'image');
+  for (const p of pending) if (p.kind === 'audio') { const a = new Audio(); a.preload = 'metadata'; a.onloadedmetadata = () => { if (Number.isFinite(a.duration)) { p.duration = a.duration; drawMats(mode); updateGo(); const s2 = $('#set-sum'); if (s2) s2.textContent = settingsSummary(mode); } }; a.src = p.preview; }
   st.refs.push(...pending); drawMats(mode); updateGo();
+  if (pending.some((p) => p.kind === 'audio')) renderStudioBar(mode);
   try {
-    const got = await uploadFiles(ok);
+    const got = await uploadFiles(ok, { audio: pending.some((p) => p.kind === 'audio') });
     pending.forEach((p, i) => { const f = got.find((x) => x.name === p.name) || got[i]; if (f) Object.assign(p, f, { loading: false }); else p.failed = true; });
   } catch (e) { errToast(e); pending.forEach((p) => (p.failed = true)); }
   st.refs = st.refs.filter((r) => !r.failed);
   const lim = (k) => refLimit(mode, k);
-  st.refs = [...st.refs.filter((r) => r.kind === 'image').slice(-lim('image')), ...st.refs.filter((r) => r.kind === 'video').slice(-lim('video'))];
+  st.refs = [...st.refs.filter((r) => r.kind === 'image').slice(-lim('image')), ...st.refs.filter((r) => r.kind === 'video').slice(-lim('video')), ...st.refs.filter((r) => r.kind === 'audio').slice(-1)];
   drawMats(mode); updateGo();
 }
 
@@ -2175,6 +2275,14 @@ function openSettings(anchor, mode) {
   const body = h('div', { class: 'settings' });
   const redraw = () => {
     const kids = [h('h4', {}, mode === 'video' ? 'Video settings' : 'Image settings', h('button', { onclick: () => { if (mode === 'video') { st.resolution = ''; st.ratio = ''; st.duration = 5; } else { st.size = ''; st.quality = 'medium'; } st.count = 1; normaliseSettings(mode); saveStudio(mode); redraw(); sync(); } }, icon('retry'), 'Reset'))];
+    if (mode === 'video' && isAvatar(m)) {
+      const a = voiceRef(st);
+      kids.push(h('div', { class: 'row' }, h('div', {}, 'Shape', h('small', {}, 'Follows your photo. Use a portrait photo for TikTok and Reels.'))),
+        h('div', { class: 'row' }, h('div', {}, 'Quality', h('small', {}, '720p'))),
+        h('div', { class: 'row' }, h('div', {}, 'Length', h('small', {}, a ? `Follows the voice: ${a.duration ? Math.round(a.duration) + ' seconds' : 'its full length'}` : 'Follows the script read aloud, from 4 seconds to 5 minutes'))),
+        h('p', { class: 'set-note' }, 'One talking video per run. A failed video is refunded.'));
+      return body.replaceChildren(...kids);
+    }
     if (mode === 'video') {
       const v = m.video;
       kids.push(labInfo('Aspect ratio', 'ratio'), h('div', { class: 'opts' }, v.ratios.map((r) => h('button', { class: 'opt' + (st.ratio === r ? ' on' : ''), onclick: () => { st.ratio = r; redraw(); sync(); } }, ratioIcon(r), r === 'adaptive' ? 'Auto' : r))));
@@ -2217,11 +2325,13 @@ function updateGo() {
   const task = mode === 'video' ? videoTask() : null;
   const hasVideo = st.refs.some((r) => r.kind === 'video') || !!st.videoUrl;
   const needsVideo = (task === 'edit' || task === 'extend') && !hasVideo;
-  const needsRef = mode === 'video' && !needsVideo && !m.video.textToVideo && !st.refs.length && !st.videoUrl && !(st.characterId && m.video.imageToVideo);
+  const avatar = mode === 'video' && isAvatar(m);
+  const needsRef = mode === 'video' && !needsVideo && !m.video.textToVideo && (avatar ? !st.refs.some((r) => r.kind === 'image') && !st.characterId : !st.refs.length && !st.videoUrl && !(st.characterId && m.video.imageToVideo));
   const look = mode === 'image' ? curStyle() : null;
   const needsPhoto = !!look?.needsImage && !st.refs.length && !st.characterId;
-  go.disabled = (!hasText && !(look?.needsImage && !needsPhoto)) || needsRef || needsVideo || needsPhoto || st.refs.some((r) => r.loading);
-  go.title = needsVideo ? `Add the video you want to ${task === 'extend' ? 'extend' : 'edit'} first` : needsPhoto ? `${look.name} changes a photo. Add a photo first.` : needsRef ? `${shortName(m)} needs a reference ${m.video.videoToVideo ? 'video' : 'image'}` : !hasText ? 'Describe what you want first' : `About ${fmtCredits(estimate(mode))} credits`;
+  const hasVoice = avatar && !!voiceRef(st);
+  go.disabled = (!hasText && !hasVoice && !(look?.needsImage && !needsPhoto)) || needsRef || needsVideo || needsPhoto || st.refs.some((r) => r.loading);
+  go.title = needsVideo ? `Add the video you want to ${task === 'extend' ? 'extend' : 'edit'} first` : needsPhoto ? `${look.name} changes a photo. Add a photo first.` : needsRef ? (avatar ? 'Add a photo of the person who talks first' : `${shortName(m)} needs a reference ${m.video.videoToVideo ? 'video' : 'image'}`) : !hasText && !hasVoice ? (avatar ? 'Type what the person says, or add their voice' : 'Describe what you want first') : `About ${fmtCredits(estimate(mode))} credits`;
 }
 
 const ENH_TIP = 'Improve my prompt: a short, point-by-point version. Reads your photo too when one is attached.';
@@ -2259,14 +2369,15 @@ async function generate(mode) {
   const ta = $('#prompt');
   const prompt = ta?.value.trim();
   const look = mode === 'image' ? curStyle() : null;
-  if ((!prompt && !look?.needsImage) || $('#go')?.disabled) return;
+  const avatar = mode === 'video' && isAvatar(m);
+  if ((!prompt && !look?.needsImage && !(avatar && voiceRef(st))) || $('#go')?.disabled) return;
   ENH_UNDO?.strip?.close(); ENH_UNDO = null; drawEnhBtn();
   st.busy = true; updateGo();
-  const autoEnh = !!st.autoEnhance && !!prompt;
+  const autoEnh = !!st.autoEnhance && !!prompt && !avatar; // a talking video's words are its script: never rewritten
   const body = { idem: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`, mode, model: m.id, prompt, task: mode === 'video' ? videoTask() : undefined, styleId: look?.id, styleVar: look?.variable ? st.styleVar || look.variable.options[0] : undefined, fileIds: st.refs.map((r) => r.id), count: st.count, enhance: false, videoUrl: st.videoUrl || undefined, characterId: st.characterId || undefined, projectId: S.projectId || undefined,
-    params: mode === 'image' ? { size: st.size, quality: st.quality } : { resolution: st.resolution, ratio: st.ratio, duration: st.duration } };
+    params: mode === 'image' ? { size: st.size, quality: st.quality } : avatar ? { resolution: '720p', ratio: 'adaptive', duration: avatarSeconds(st, prompt || ''), voiceId: st.voiceId || S.voices?.defaultVoice, speed: st.speed || 1 } : { resolution: st.resolution, ratio: st.ratio, duration: st.duration } };
   // Show a placeholder right away.
-  const temp = { id: 'tmp', mode, model: m.id, prompt: prompt || look?.name || '', styleName: look?.name, params: { ...body.params, count: st.count }, status: 'pending', media: [], createdAt: new Date().toISOString(), progress: autoEnh ? 'improving your prompt (auto-enhance is on)' : mode === 'image' ? 'creating' : 'starting' };
+  const temp = { id: 'tmp', mode, model: m.id, prompt: prompt || look?.name || (avatar ? 'Talking video' : ''), styleName: look?.name, params: { ...body.params, count: st.count }, status: 'pending', media: [], createdAt: new Date().toISOString(), progress: autoEnh ? 'improving your prompt (auto-enhance is on)' : mode === 'image' ? 'creating' : 'starting' };
   S.gens[mode] = [temp, ...(S.gens[mode] || [])];
   // Empty the bar straight away so the same prompt is not sent twice. It comes back if the request fails.
   const sent = { refs: st.refs, videoUrl: st.videoUrl };
@@ -3009,7 +3120,7 @@ function openChatPicker(anchor) {
       if (!cs.length) list.append(h('div', { class: 'empty' }, 'No models match'));
       return;
     }
-    const ms = S.models.filter((m) => m.type === tab && (!q || (m.name + m.provider + m.id + (m.blurb || '')).toLowerCase().includes(q)) && !(m.type === 'video' && !m.video.textToVideo && !m.video.imageToVideo));
+    const ms = S.models.filter((m) => m.type === tab && (!q || (m.name + m.provider + m.id + (m.blurb || '')).toLowerCase().includes(q)) && !(m.type === 'video' && ((!m.video.textToVideo && !m.video.imageToVideo) || m.video.avatar)));
     list.replaceChildren(...ms.map((m) => h('button', { class: 'mopt' + (m.id === S.chatModelId ? ' sel' : ''), onclick: () => { closePop(); selectChatModel(m.id); } },
       modelLogo(m),
       h('div', { class: 'txt' },
@@ -4491,4 +4602,4 @@ const refreshRecents = () => loadConversations().then(renderRecents).catch(() =>
 // Crop and download for social sizes (public/crop.js), loaded the first time someone opens it.
 async function openCrop(fileId, opts = {}) { await pageCss('crop-css', '/crop.css'); return (await import('./crop.js')).openCrop(fileId, opts); }
 const canCrop = (x) => !!x && x.type === 'video' && !!x.id && /^\/api\/(media|files)\//.test(x.url || '/api/media/');
-export { h, $, $$, icon, S, store, api, toast, errToast, cleanErr, popover, closePop, dialog, field, pickFiles, openAssetPicker, uploadFiles, downloadBlob, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openLightbox, byId, modelLogo, shortName, refreshRecents, startDownload, addDownload, openCrop, canCrop };
+export { voiceList, loadVoices, playSample, addStudioRefs, isAvatar, saveStudio, h, $, $$, icon, S, store, api, toast, errToast, cleanErr, popover, closePop, dialog, field, pickFiles, openAssetPicker, uploadFiles, downloadBlob, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openLightbox, byId, modelLogo, shortName, refreshRecents, startDownload, addDownload, openCrop, canCrop };
