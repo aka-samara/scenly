@@ -2090,7 +2090,7 @@ function modeChip(mode) {
 function voiceChip(mode) {
   const st = S.studio[mode];
   const cur = () => S.voices?.voices?.find((v) => v.id === st.voiceId) || S.voices?.voices?.find((v) => v.id === S.voices?.defaultVoice);
-  const chip = h('button', { class: 'chipbtn voice-chip', id: 'voice-chip', title: 'The voice that reads your words', onclick: (e) => openVoiceMenu(e.currentTarget, mode) }, icon('mic'), h('span', { class: 'nm' }, cur()?.name || 'Voice'), icon('down'));
+  const chip = h('button', { class: 'chipbtn voice-chip', id: 'voice-chip', title: 'The voice that reads your words', onclick: (e) => openVoiceMenu(e.currentTarget, mode) }, icon('mic'), h('span', { class: 'nm' }, cur()?.name || 'Voice'), h('span', { class: 'tw', title: 'Sound adjusted', hidden: !voiceTweakLabel(studioVoiceSet(st)) }), icon('down'));
   if (!S.voices) loadVoices().then(() => { const n = chip.querySelector('.nm'); if (n) n.textContent = cur()?.name || 'Voice'; });
   return chip;
 }
@@ -2101,8 +2101,45 @@ function playSample(vid, btn) {
   btn?.classList.add('on'); SAMPLE_AUDIO.onended = () => btn?.classList.remove('on');
   SAMPLE_AUDIO.play().catch(() => { btn?.classList.remove('on'); toast('This sample could not be played right now.'); });
 }
-// A list of voices to pick from, grouped by accent, with a play button and speed. Used by Video Studio and the AI voice tool.
-function voiceList({ value, speed = 1, onPick, onSpeed }) {
+// How a voice reads: speed and volume are multipliers (0.5 to 2), tone is in semitones (-12 to 12), style is a short note.
+const VOICE_NORMAL = { speed: 1, volume: 1, pitch: 0, style: '' };
+const voiceTweaks = (o = {}) => {
+  const n = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Number(v) : d);
+  return { speed: Math.min(2, Math.max(0.5, n(o.speed, 1))), volume: Math.min(2, Math.max(0.5, n(o.volume, 1))), pitch: Math.min(12, Math.max(-12, Math.round(n(o.pitch, 0)))), style: String(o.style || '').slice(0, 200) };
+};
+/** A short summary of the changes from normal, such as "Faster · Louder", or '' when all is normal. */
+function voiceTweakLabel(o = {}) {
+  const t = voiceTweaks(o); const out = [];
+  if (Math.abs(t.speed - 1) > 0.01) out.push(t.speed < 1 ? 'Slower' : 'Faster');
+  if (Math.abs(t.volume - 1) > 0.01) out.push(t.volume < 1 ? 'Softer' : 'Louder');
+  if (t.pitch) out.push(t.pitch < 0 ? 'Lower tone' : 'Higher tone');
+  if (t.style.trim()) out.push('Reading note');
+  return out.join(' · ');
+}
+// Sliders for speech rate, volume and tone, and a "how to read it" note. onChange(all settings) on every change.
+function voiceTweakPanel(settings, onChange) {
+  const t = voiceTweaks(settings);
+  const fire = () => { onChange({ ...t }); sum.textContent = voiceTweakLabel(t) || 'Normal'; box.classList.toggle('changed', !!voiceTweakLabel(t)); };
+  const row = (key, label, { min, max, step, fmt }) => {
+    const out = h('output', {}, fmt(t[key]));
+    const input = h('input', { type: 'range', min, max, step, value: t[key], 'aria-label': label, oninput: (e) => { t[key] = Number(e.target.value); out.textContent = fmt(t[key]); fire(); } });
+    return h('label', { class: 'vtw-row', 'data-k': key }, h('span', { class: 'vtw-l' }, label), input, out);
+  };
+  const pct = (v) => (Math.abs(v - 1) < 0.01 ? 'Normal' : `${Math.round(v * 100)}%`);
+  const note = h('input', { class: 'vtw-note', id: 'vtw-note', maxlength: 200, value: t.style, placeholder: 'e.g. Slowly and warmly, like a bedtime story', oninput: (e) => { t.style = e.target.value; fire(); } });
+  const sum = h('span', { class: 'vtw-sum' }, voiceTweakLabel(t) || 'Normal');
+  const body = h('div', { class: 'vtw-body' },
+    row('speed', 'Speech rate', { min: 0.5, max: 2, step: 0.05, fmt: (v) => (Math.abs(v - 1) < 0.01 ? 'Normal' : `${v.toFixed(2).replace(/0$/, '')}×`) }),
+    row('volume', 'Volume', { min: 0.5, max: 2, step: 0.05, fmt: pct }),
+    row('pitch', 'Tone', { min: -12, max: 12, step: 1, fmt: (v) => (!v ? 'Normal' : (v > 0 ? '+' : '') + v) }),
+    h('div', { class: 'vtw-nrow' }, h('span', { class: 'vtw-l' }, 'How to read it'), note),
+    h('div', { class: 'vtw-foot' }, h('button', { class: 'link', onclick: (e) => { e.preventDefault(); Object.assign(t, VOICE_NORMAL); box.querySelectorAll('.vtw-row').forEach((r) => { const k = r.dataset.k; r.querySelector('input').value = t[k]; r.querySelector('output').textContent = 'Normal'; }); note.value = ''; fire(); } }, 'Reset to normal')));
+  const box = h('details', { class: 'vtw' + (voiceTweakLabel(t) ? ' changed' : '') }, h('summary', {}, icon('sliders'), h('span', {}, 'Adjust how it sounds'), sum), body);
+  return box;
+}
+// A list of voices to pick from, grouped by accent, with a play button, and either the full sound settings
+// (settings + onSettings) or the simple speed buttons (onSpeed). Used by Video Studio, AI Voice and the Video Builder.
+function voiceList({ value, speed = 1, onPick, onSpeed, settings, onSettings }) {
   const vs = S.voices?.voices || [];
   const q = h('input', { placeholder: 'Search voices', class: 'vsearch', oninput: () => draw() });
   const list = h('div', { class: 'vlist' });
@@ -2118,15 +2155,17 @@ function voiceList({ value, speed = 1, onPick, onSpeed }) {
   draw();
   const speeds = [[0.85, 'Slower'], [1, 'Normal'], [1.15, 'Faster']];
   return h('div', { class: 'vmenu' }, q, list,
-    onSpeed && h('div', { class: 'vspeed' }, h('span', {}, 'Speed'), h('div', { class: 'opts' }, speeds.map(([n, l]) => h('button', { class: 'opt' + (Math.abs((speed || 1) - n) < 0.01 ? ' on' : ''), onclick: (e) => { onSpeed(n); e.currentTarget.parentElement.querySelectorAll('.opt').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); } }, l)))),
-    h('p', { class: 'set-note' }, 'Every voice speaks the language you type in. Add tags like [happy], [whispering] or [laughs] to direct the delivery.'));
+    onSettings ? voiceTweakPanel(settings || { speed }, onSettings) : onSpeed && h('div', { class: 'vspeed' }, h('span', {}, 'Speed'), h('div', { class: 'opts' }, speeds.map(([n, l]) => h('button', { class: 'opt' + (Math.abs((speed || 1) - n) < 0.01 ? ' on' : ''), onclick: (e) => { onSpeed(n); e.currentTarget.parentElement.querySelectorAll('.opt').forEach((b) => b.classList.toggle('on', b === e.currentTarget)); } }, l)))),
+    h('p', { class: 'set-note' }, 'Every voice speaks the language you type in. Pick a voice from your language for a native accent. Add tags like [happy], [whispering] or [laughs] to direct the delivery.'));
 }
+// The talking-video voice settings kept with the Video Studio state.
+const studioVoiceSet = (st) => ({ speed: st.speed || 1, volume: st.voiceVolume ?? 1, pitch: st.voicePitch ?? 0, style: st.voiceStyle || '' });
 async function openVoiceMenu(anchor, mode) {
   const st = S.studio[mode];
   if (!S.voices) { await loadVoices(); if (!S.voices?.voices?.length) return toast('AI voices are not available right now.', 'error'); }
   popover(anchor, h('div', { class: 'menu voice-menu' },
     h('div', { class: 'menu-head' }, 'VOICE', info('The person in your photo says your words in this voice. You can also add a recording of their real voice instead.')),
-    voiceList({ value: st.voiceId || S.voices.defaultVoice, speed: st.speed || 1, onPick: (v) => { closePop(); SAMPLE_AUDIO?.pause(); st.voiceId = v.id; saveStudio(mode); renderStudioBar(mode); }, onSpeed: (n) => { st.speed = n; saveStudio(mode); updateGo(); } }),
+    voiceList({ value: st.voiceId || S.voices.defaultVoice, settings: studioVoiceSet(st), onPick: (v) => { closePop(); SAMPLE_AUDIO?.pause(); st.voiceId = v.id; saveStudio(mode); renderStudioBar(mode); }, onSettings: (t) => { Object.assign(st, { speed: t.speed, voiceVolume: t.volume, voicePitch: t.pitch, voiceStyle: t.style }); saveStudio(mode); updateGo(); const n = $('#voice-chip .tw'); if (n) n.hidden = !voiceTweakLabel(t); } }),
     h('hr'),
     h('button', { class: 'mopt-plain', onclick: () => { closePop(); SAMPLE_AUDIO?.pause(); pickFiles('audio/*,.mp3,.wav,.m4a', false, (f) => addStudioRefs(mode, f)); } }, icon('upload'), 'Use a recording of their voice instead'),
   ), 'above');
@@ -2380,7 +2419,7 @@ async function generate(mode) {
   st.busy = true; updateGo();
   const autoEnh = !!st.autoEnhance && !!prompt && !avatar; // a talking video's words are its script: never rewritten
   const body = { idem: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`, mode, model: m.id, prompt, task: mode === 'video' ? videoTask() : undefined, styleId: look?.id, styleVar: look?.variable ? st.styleVar || look.variable.options[0] : undefined, fileIds: st.refs.map((r) => r.id), count: st.count, enhance: false, videoUrl: st.videoUrl || undefined, characterId: st.characterId || undefined, projectId: S.projectId || undefined,
-    params: mode === 'image' ? { size: st.size, quality: st.quality } : avatar ? { resolution: '720p', ratio: 'adaptive', duration: avatarSeconds(st, prompt || ''), voiceId: st.voiceId || S.voices?.defaultVoice, speed: st.speed || 1 } : { resolution: st.resolution, ratio: st.ratio, duration: st.duration } };
+    params: mode === 'image' ? { size: st.size, quality: st.quality } : avatar ? { resolution: '720p', ratio: 'adaptive', duration: avatarSeconds(st, prompt || ''), voiceId: st.voiceId || S.voices?.defaultVoice, ...voiceTweaks(studioVoiceSet(st)) } : { resolution: st.resolution, ratio: st.ratio, duration: st.duration } };
   // Show a placeholder right away.
   const temp = { id: 'tmp', mode, model: m.id, prompt: prompt || look?.name || (avatar ? 'Talking video' : ''), styleName: look?.name, params: { ...body.params, count: st.count }, status: 'pending', media: [], createdAt: new Date().toISOString(), progress: autoEnh ? 'improving your prompt (auto-enhance is on)' : mode === 'image' ? 'creating' : 'starting' };
   S.gens[mode] = [temp, ...(S.gens[mode] || [])];
@@ -4607,4 +4646,4 @@ const refreshRecents = () => loadConversations().then(renderRecents).catch(() =>
 // Crop and download for social sizes (public/crop.js), loaded the first time someone opens it.
 async function openCrop(fileId, opts = {}) { await pageCss('crop-css', '/crop.css'); return (await import('./crop.js')).openCrop(fileId, opts); }
 const canCrop = (x) => !!x && x.type === 'video' && !!x.id && /^\/api\/(media|files)\//.test(x.url || '/api/media/');
-export { voiceList, loadVoices, playSample, addStudioRefs, isAvatar, saveStudio, h, $, $$, icon, S, store, api, toast, errToast, cleanErr, popover, closePop, dialog, field, pickFiles, openAssetPicker, uploadFiles, downloadBlob, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openLightbox, byId, modelLogo, shortName, refreshRecents, startDownload, addDownload, openCrop, canCrop };
+export { voiceList, voiceTweaks, voiceTweakLabel, loadVoices, playSample, addStudioRefs, isAvatar, saveStudio, h, $, $$, icon, S, store, api, toast, errToast, cleanErr, popover, closePop, dialog, field, pickFiles, openAssetPicker, uploadFiles, downloadBlob, fmtSize, info, topbar, fmtCredits, setCredits, downloadFiles, openLightbox, byId, modelLogo, shortName, refreshRecents, startDownload, addDownload, openCrop, canCrop };

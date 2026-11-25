@@ -58,3 +58,19 @@ test('the voice list leaves out voices named after famous people or characters',
   for (const v of VOICES) assert.doesNotMatch(v.id + v.name, /pitt|hiddleston|lana_del|zendaya|peppa|peiqi|gollum|joker|godfather|michael-mouse|simba|chandler/i);
   assert.equal(new Set(VOICES.map((v) => v.id)).size, VOICES.length);
 });
+
+test('voice settings stay inside the ranges the speech API accepts', async () => {
+  const { voiceSettings } = await import('../server/byteplus.js');
+  assert.equal(voiceSettings({}), null, 'normal settings send nothing');
+  assert.equal(voiceSettings({ speed: 1, volume: 1, pitch: 0, style: '  ' }), null);
+  assert.deepEqual(voiceSettings({ speed: 3, volume: 0.1, pitch: 40, style: ' Slowly,\n warmly ' }), { speed: 2, volume: 0.5, pitch: 12, instructions: ['Slowly, warmly'] });
+  assert.deepEqual(voiceSettings({ speed: '0.75', pitch: -4.4 }), { speed: 0.75, pitch: -4 });
+  assert.equal(voiceSettings({ style: 'x'.repeat(500) }).instructions[0].length, 200);
+});
+
+test('every voice has a unique id, and native voices name their language', async () => {
+  const { VOICES } = await import('../server/byteplus.js');
+  assert.equal(new Set(VOICES.map((v) => v.id)).size, VOICES.length);
+  for (const v of VOICES.filter((x) => !['American', 'British'].includes(x.accent))) assert.ok(/^[a-z]{2}$/.test(v.lang || ''), `${v.name} names its language`);
+  for (const acc of ['Italian', 'Spanish (Spain)', 'Spanish (Latin America)', 'Chinese']) assert.ok(VOICES.filter((v) => v.accent === acc).length >= 4, `${acc} has several native voices`);
+});

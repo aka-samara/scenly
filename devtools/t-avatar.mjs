@@ -65,6 +65,10 @@ ok(Math.abs((bal0 - (await balance())) - r.credits) < 0.01, 'the balance went do
 const tts = mockLog().filter((x) => x.kind === 'tts').pop();
 ok(tts.key === 'test-speech-key' && tts.body.model_id === 'dola-seed-tts-3.0' && tts.body.voice_settings?.speed === 1.15 && tts.voice === vv.voices[1].id, 'the speech request uses the key, model, voice and speed');
 const VOICEFILE = r.file;
+r = await J('/api/voice/speak', 'POST', { text: 'Read this one differently, please.', voiceId: vv.voices[1].id, speed: 0.8, volume: 1.4, pitch: -3, style: 'Slowly and warmly, like a bedtime story' });
+const tts2 = mockLog().filter((x) => x.kind === 'tts').pop();
+ok(JSON.stringify(tts2.body.voice_settings) === JSON.stringify({ speed: 0.8, volume: 1.4, pitch: -3, instructions: ['Slowly and warmly, like a bedtime story'] }), 'speech rate, volume, tone and the reading note reach the speech API: ' + JSON.stringify(tts2.body.voice_settings));
+ok(r.file?.aiVoice?.volume === 1.4 && r.file.aiVoice.pitch === -3 && /bedtime/.test(r.file.aiVoice.style || ''), 'and are kept with the voice-over');
 const raw = await ctx.request.get(B + r.file.url); ok(raw.status() === 200 && (await raw.body()).length > 1000, 'the voice-over can be played and downloaded');
 const ups = (await J('/api/uploads')).items; ok(ups.some((x) => x.id === VOICEFILE.id && x.aiVoice?.voiceName), 'it is in my files (the asset picker) with its voice name');
 bal0 = await balance();
@@ -78,7 +82,7 @@ ok(r.status === 400 && /too long/.test(r.error), 'a script over 10,000 character
 const face = await upload(tmp + '/face.png', 'image/png');
 bal0 = await balance();
 const words = 'Hello, I am Ada. Welcome to my channel, today I will show you three tricks for better video ads.';
-r = await J('/api/generate', 'POST', { idem: 'a1' + Date.now(), mode: 'video', model: 'omnihuman-2.0', prompt: words, fileIds: [face.id], enhance: true, params: { voiceId: vv.voices[2].id, speed: 1 } });
+r = await J('/api/generate', 'POST', { idem: 'a1' + Date.now(), mode: 'video', model: 'omnihuman-2.0', prompt: words, fileIds: [face.id], enhance: true, params: { voiceId: vv.voices[2].id, speed: 1, pitch: 2, style: 'Cheerful' } });
 ok(r.generation?.status === 'pending', 'a talking video starts from a photo and a script');
 const secs = r.generation?.params?.duration;
 const sub = mockLog().filter((x) => x.kind === 'vision' && x.path.endsWith('submit_task_v2')).pop();
@@ -86,7 +90,7 @@ ok(/^(Bearer test-vision-key|HMAC-SHA256 Credential=test-ak\/)/.test(sub?.auth |
 ok(/^https:\/\/scenly\.test\/pp\/.+\.png$/.test(sub?.body.image_urls?.[0] || ''), 'the photo goes as a public link: ' + sub?.body.image_urls?.[0]);
 ok(/^https:\/\/scenly\.test\/pa\/.+\.mp3$/.test(sub?.body.audio_url || ''), 'the voice goes as a public link: ' + sub?.body.audio_url);
 ok(!sub?.body.prompt, 'the script is spoken, not sent as a movement note');
-const lastTts = mockLog().filter((x) => x.kind === 'tts').pop(); ok(lastTts.body.text === words, 'the script was read word for word (auto-enhance never rewrites it)');
+const lastTts = mockLog().filter((x) => x.kind === 'tts').pop(); ok(lastTts.body.text === words, 'the script was read word for word (auto-enhance never rewrites it)'); ok(lastTts.body.voice_settings?.pitch === 2 && lastTts.body.voice_settings?.instructions?.[0] === 'Cheerful', 'the talking video voice uses the tone and reading note too');
 const pa = new URL(sub.body.audio_url); const paRes = await ctx.request.get(B + pa.pathname);
 ok(paRes.status() === 200 && /audio/.test(paRes.headers()['content-type']), 'the voice link serves the sound file');
 ok((await ctx.request.get(B + pa.pathname.replace(/\/[^/]+\.mp3$/, '/wrongsig.mp3'))).status() === 404, 'a wrong link signature is refused');
@@ -158,10 +162,19 @@ ok(Math.abs(cost - (Math.max(4, Math.ceil(words.length / 15)) * 73.5 + words.len
 await shot('3-studio-ready');
 await p.click('#voice-chip'); await p.waitForSelector('.vrow');
 await shot('4-voice-menu');
+ok(await p.locator('.menu-cap', { hasText: 'Italian accent' }).count() === 1 && await p.locator('.menu-cap', { hasText: 'Spanish (Latin America) accent' }).count() === 1, 'native voices are grouped by language');
+await p.click('.vtw > summary'); await p.waitForSelector('.vtw-body');
+await p.locator('.vtw-row[data-k=pitch] input').fill('3'); await p.fill('#vtw-note', 'Cheerful and bright');
+ok(/Higher tone · Reading note/.test(await p.locator('.vtw-sum').innerText()), 'the sound settings summary follows the sliders');
+await shot('4b-voice-settings');
+await p.click('.vtw-foot .link');
+ok(/Normal/.test(await p.locator('.vtw-sum').innerText()), 'Reset to normal puts everything back');
+await p.locator('.vtw-row[data-k=pitch] input').fill('2'); await p.fill('#vtw-note', 'Cheerful');
 await p.click('.vrow:nth-of-type(3) .vpick');
 await p.click('#set-chip'); await p.waitForSelector('.settings'); await shot('5-settings'); await p.mouse.click(700, 200);
 await p.click('#go');
 await p.waitForSelector('.gen video', { timeout: 30000 });
+const uiTts = mockLog().filter((x) => x.kind === 'tts').pop(); ok(uiTts.body.voice_settings?.pitch === 2 && uiTts.body.voice_settings?.instructions?.[0] === 'Cheerful', 'Video Studio sends the tone and reading note picked in the voice menu');
 await shot('6-result');
 // own voice from the asset picker
 await p.click('#mat-add'); await p.click('#mat-assets'); await p.waitForSelector('.modal-bg');
@@ -199,7 +212,11 @@ await p.goto(B + '/#/builder/' + BP); await p.waitForSelector('#vb-vmenu, #vb-va
 if (await p.locator('#vb-vmenu').count()) { await p.click('#vb-vmenu'); await p.waitForSelector('text=Make a new one with AI voice'); await shot('10-builder-voice-menu'); await p.click('text=Make a new one with AI voice'); }
 await p.waitForSelector('#av-script'); await p.fill('#av-script', 'Here is our new product. It is light, strong and made to last.');
 await shot('11-builder-dialog');
+await p.click('#av-voice'); await p.waitForSelector('.vtw'); await p.click('.vtw > summary'); await p.locator('.vtw-row[data-k=volume] input').fill('1.5');
+ok(/Louder/.test(await p.locator('#av-voice').innerText()), 'the Builder dialog voice chip shows the change');
+await shot('11b-builder-voice-settings'); await p.click('#av-script');
 await p.click('#av-go'); await p.waitForSelector('#av-script', { state: 'detached', timeout: 20000 });
+ok(mockLog().filter((x) => x.kind === 'tts').pop().body.voice_settings?.volume === 1.5, 'the Builder voice-over uses the louder volume');
 const pj = (await J('/api/builder/projects/' + BP)).project;
 ok(pj.voice?.fileId && pj.voice.fileId !== VOICEFILE.id, 'the Builder dialog replaced the voice-over with the new one');
 
@@ -210,6 +227,9 @@ await pp.goto(B + '/#/video'); await pp.waitForSelector('#model-chip'); await pp
 await pp.screenshot({ path: `${OUT}/12-phone-studio.png` });
 const over = await pp.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1); ok(!over, 'no sideways scroll on a phone (studio)');
 await pp.click('#voice-chip').catch(() => {}); await pp.waitForTimeout(400); await pp.screenshot({ path: `${OUT}/13-phone-voice-menu.png` });
+await pp.click('.vtw > summary').catch(() => {}); await pp.waitForTimeout(300); await pp.screenshot({ path: `${OUT}/13b-phone-voice-settings.png` });
+ok(await pp.evaluate(() => { const m = document.querySelector('.voice-menu'); if (!m) return false; const r = m.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 1 && r.top >= 0; }), 'the voice menu with settings fits the phone screen');
+await pp.keyboard.press('Escape').catch(() => {});
 await pp.goto(B + '/#/voice'); await pp.waitForSelector('#av-script'); await pp.waitForTimeout(500);
 await pp.screenshot({ path: `${OUT}/14-phone-voice-page.png`, fullPage: true });
 ok(!(await pp.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), 'no sideways scroll on a phone (AI Voice)');

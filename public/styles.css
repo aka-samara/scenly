@@ -1509,3 +1509,26 @@ body:has(.lightbox) .popover { z-index: 130; }
 .vspeed .opt { flex: 1; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text-2); font-size: 12px; }
 .vspeed .opt.on { border-color: rgba(67,97,238,.5); color: var(--accent); }
 .vmenu .set-note { margin: 2px 6px 4px; font-size: 11.5px; color: var(--faint); line-height: 1.4; }
+
+/* Voice sound settings (speech rate, volume, tone, how to read it) inside the voice picker */
+.vtw { border-top: 1px solid var(--line); padding: 4px 2px 0; }
+.vtw > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 7px 6px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: var(--text-2); }
+.vtw > summary::-webkit-details-marker { display: none; }
+.vtw > summary:hover { background: rgb(var(--ink) / .05); }
+.vtw > summary .i { width: 15px; height: 15px; color: var(--muted); }
+.vtw > summary .vtw-sum { margin-left: auto; font-size: 11.5px; color: var(--faint); max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vtw.changed > summary .vtw-sum { color: var(--accent); }
+.vtw-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 6px 6px; }
+.vtw-row { display: grid; grid-template-columns: 92px 1fr 54px; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
+.vtw-row input[type=range] { width: 100%; accent-color: var(--accent); }
+.vtw-row output { text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.vtw-nrow { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-2); }
+.vtw-note { height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 13px; outline: 0; }
+.vtw-note:focus { border-color: rgba(67,97,238,.5); }
+.vtw-foot { display: flex; justify-content: flex-end; }
+.vtw-foot .link { font-size: 12px; color: var(--accent); background: none; border: 0; padding: 2px 0; cursor: pointer; }
+.vtw[open] ~ .set-note { display: none; }
+.voice-menu:has(.vtw[open]) .vlist { max-height: 170px; }
+.voice-chip .tw { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.voice-chip .tw[hidden] { display: none; }
+@media (max-width: 640px) { .vtw-row { grid-template-columns: 82px 1fr 50px; } .vtw-note { font-size: 16px; } }

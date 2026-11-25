@@ -61,7 +61,7 @@ export async function startAvatar(user, { model, prompt, fileIds = [], params: q
     // Checked before anything is made, so nobody pays for a voice-over without the video.
     needCredits(user, speechCredits(script.length) + per * Math.max(OMNI_AUDIO.min, Math.ceil(est)) * 1.1);
     const v = findVoice(q.voiceId) || findVoice(DEFAULT_VOICE);
-    const r = await makeSpeech(user, { text: script, voiceId: v.id, speed: q.speed, minSeconds: OMNI_AUDIO.min, desc: `AI voice · ${v.name} (for ${model.name})`, extra: { forAvatar: true, ...(target?.generationId ? { generationId: target.generationId } : {}) } });
+    const r = await makeSpeech(user, { text: script, voiceId: v.id, speed: q.speed, volume: q.volume, pitch: q.pitch, style: q.style, minSeconds: OMNI_AUDIO.min, desc: `AI voice · ${v.name} (for ${model.name})`, extra: { forAvatar: true, ...(target?.generationId ? { generationId: target.generationId } : {}) } });
     voice = r.file; voiceCredits = r.credits;
   }
   voice = await readyAudio(voice);
