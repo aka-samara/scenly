@@ -155,6 +155,7 @@ export async function speak({ text, voiceId, speed, language }) {
   if (!r.ok || err || !chunks.length) {
     const msg = err?.message || err?.code || raw.slice(0, 300);
     gatewayLog(r.status === 401 || r.status === 403 ? 'BytePlus Speech key refused (check BYTEPLUS_SPEECH_API_KEY)' : 'BytePlus Speech said', r.status, typeof msg === 'string' ? msg : JSON.stringify(msg));
+    if (r.status === 401 || r.status === 403) throw new ProviderError('AI voice is not available right now. Please try again a little later.', 503, 'voice_unavailable');
     throw new ProviderError(userWords(r.status === 429 ? 'crowded' : 'busy'), r.status === 429 ? 429 : 502, 'tts_failed');
   }
   if (!done) gatewayLog('BytePlus Speech', r.status, 'stream ended without a final event; keeping the audio that arrived');

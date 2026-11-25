@@ -20,7 +20,7 @@ function maker({ text = '', cta = 'Make voice-over', onMade, compact = false }) 
   const cost = h('span', { id: 'av-cost' });
   const vbtn = h('button', { class: 'chipbtn av-voice', id: 'av-voice', onclick: (e) => openPicker(e.currentTarget) });
   const go = h('button', { class: 'btn primary', id: 'av-go', onclick: () => make() }, icon('mic'), cta, h('span', { class: 'cost' }, icon('bolt'), cost));
-  const drawVoice = () => { const v = voice(); vbtn.replaceChildren(icon('mic'), h('span', { class: 'nm' }, v ? `${v.name} · ${v.accent}` : 'Pick a voice'), st.speed !== 1 ? h('span', { class: 'tag dim' }, st.speed < 1 ? 'Slower' : 'Faster') : null, icon('down')); };
+  const drawVoice = () => { const v = voice(); vbtn.replaceChildren(...[icon('mic'), h('span', { class: 'nm' }, v ? `${v.name} · ${v.accent}` : 'Pick a voice'), st.speed !== 1 && h('span', { class: 'tag dim' }, st.speed < 1 ? 'Slower' : 'Faster'), icon('down')].filter(Boolean)); };
   const sync = () => {
     const n = ta.value.trim().length;
     count.textContent = `${n.toLocaleString()} / ${maxChars().toLocaleString()} characters${n ? ` · about ${fmtLen(Math.max(1, n / 15 / st.speed))}` : ''}`;

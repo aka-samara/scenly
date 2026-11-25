@@ -52,6 +52,9 @@ const app = express();
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: Math.max(limits().videoMb, limits().fileMb, limits().audioMb, limits().imageMb) * MB, files: 10 } });
 
 app.disable('x-powered-by');
+// Cloudflare swaps a 502 or 504 from this server for its own error page, so the person saw "Request failed (502)"
+// instead of our message. Those two are sent as 503, which Cloudflare passes through with our words intact.
+app.use((req, res, next) => { const set = res.status.bind(res); res.status = (code) => set(code === 502 || code === 504 ? 503 : code); next(); });
 // Behind Coolify's proxy (and Cloudflare) the visitor's address and https come from forwarded headers.
 app.set('trust proxy', process.env.TRUST_PROXY ?? (isProd() ? 'loopback, linklocal, uniquelocal' : false));
 app.use(securityHeaders);
