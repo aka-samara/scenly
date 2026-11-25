@@ -17,6 +17,7 @@ import { storeImage } from '../files.js';
 import { deriveLater } from '../downloads.js';
 import { layout, estimate, allowedDuration, sceneCredits, editCredits, toSrt, cleanCaptions, CAPTION_POS, MAX_REVERSE_SEC, RATIOS, TRANSITIONS, CAPTION_STYLES, MAX_SCENES, MAX_PROJECT_SEC, IMAGE_SEC, SAMPLE_RATE } from './plan.js';
 import { renderProject, cleanWork } from './render.js';
+import { cleanVnew } from './vnewdoc.js';
 
 const RESOLUTIONS = ['480p', '720p', '1080p'];
 const MOODS = ['Upbeat', 'Corporate', 'Cinematic', 'Chill', 'Emotional', 'Epic', 'Kids', 'Holiday'];
@@ -30,7 +31,7 @@ const trackFile = (track) => (track ? db.files.find((f) => f.id === track.fileId
 function fileMap(project) {
   const m = new Map(); const add = (fid) => { const f = fid && db.files.find((x) => x.id === fid && (x.userId === project.userId || x.library)); if (f) m.set(f.id, f); };
   for (const s of project.scenes) { add(s.fileId); add(s.refFileId); for (const v of s.versions || []) add(v.fileId); }
-  add(project.voice?.fileId);
+  add(project.voice?.fileId); add(project.vnew?.brand?.logoFileId);
   if (project.music?.trackId) { const f = trackFile(db.tracks.find((t) => t.id === project.music.trackId)); if (f) { m.set(f.id, f); project.music.fileId = f.id; } } else add(project.music?.fileId);
   return m;
 }
@@ -96,6 +97,7 @@ function applyDoc(project, body, userId) {
   if (RESOLUTIONS.includes(body.resolution)) project.resolution = body.resolution;
   if (body.modelId != null) project.modelId = text(body.modelId, 80);
   if (body.captionStyle && CAPTION_STYLES[body.captionStyle]) project.captionStyle = body.captionStyle;
+  if (body.vnew && typeof body.vnew === 'object') project.vnew = cleanVnew(body.vnew, (fid) => userFile(userId, fid), project.vnew); // Video (new) chips
   if (Array.isArray(body.captions)) project.captions = cleanCaptions(body.captions.slice(0, 2000), MAX_PROJECT_SEC);
   if (Array.isArray(body.scenes)) {
     if (body.scenes.length > MAX_SCENES) throw new UserError(`A project can hold up to ${MAX_SCENES} scenes.`);
@@ -428,9 +430,9 @@ export function mountBuilder(app, { requireUser, requireAdmin, wrap }) {
     if (running) return res.json({ ...(await view(p)), job: publicJob(running), already: true });
     const resolution = RESOLUTIONS.includes(req.body.resolution) ? req.body.resolution : p.resolution; const audioOnly = !!req.body.audioOnly;
     const ex = { id: id('ex_'), status: 'working', resolution, audioOnly, burnCaptions: !!req.body.burnCaptions && !audioOnly && !!ffmpegInfo().canBurn, note: req.body.burnCaptions && !audioOnly && !ffmpegInfo().canBurn ? BURN_HELP : undefined, createdAt: now() };
-    const { scenes, voice, music, captions, captionStyle, ratio, title } = p;
+    const { scenes, voice, music, captions, captionStyle, ratio, title, vnew } = p;
     const { job } = enqueue({ type: 'export', userId: req.user.id, ref: p.id, idempotencyKey: typeof req.body.idem === 'string' ? req.body.idem.slice(0, 80) : undefined,
-      payload: { projectId: p.id, exportId: ex.id, resolution, audioOnly, burnCaptions: ex.burnCaptions, snapshot: JSON.parse(JSON.stringify({ scenes, voice, music, captions, captionStyle, ratio, resolution, title })) } });
+      payload: { projectId: p.id, exportId: ex.id, resolution, audioOnly, burnCaptions: ex.burnCaptions, snapshot: JSON.parse(JSON.stringify({ scenes, voice, music, captions, captionStyle, ratio, resolution, title, vnew })) } });
     ex.jobId = job.id; p.exports = [ex, ...(p.exports || [])].slice(0, 30); save();
     res.json({ ...(await view(p)), job: publicJob(job) });
   }));

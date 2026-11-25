@@ -35,7 +35,7 @@ defineJob('keyframe', async (job, { progress }) => {
   const { p, s } = find(); const user = db.users.find((u) => u.id === job.userId);
   if (!p || !s || !user) throw Object.assign(new Error('That scene was removed.'), { retry: false });
   progress(0.2, 'Drawing the picture');
-  const r = await runImage(user, { modelId: job.payload.modelId, prompt: job.payload.prompt, size: job.payload.size, meta: { builderId: p.id, sceneId: s.id, title: p.title, hiddenFromAssets: true } });
+  const r = await runImage(user, { modelId: job.payload.modelId, prompt: job.payload.prompt, size: job.payload.size, fileIds: job.payload.refIds || [], meta: { builderId: p.id, sceneId: s.id, title: p.title, hiddenFromAssets: true } });
   // From here on the picture is paid for, so nothing below may fail the job.
   const shaped = await toShape(fs.readFileSync(locate(r.media[0])), p.ratio);
   const { p: p2, s: s2 } = find(); const n = p2 && s2 ? p2.scenes.indexOf(s2) + 1 : 0;
@@ -58,13 +58,16 @@ export function mountKeyframes(app, { requireUser, wrap }) {
     const targets = p.scenes.filter((s) => open(s) && (all ? !s.refFileId && String(s.prompt || '').trim() : req.body.sceneIds.includes(s.id)));
     if (!targets.length) throw new UserError(all ? 'Every AI scene already has a clip or a start picture. To draw a picture again, open the scene and press Preview picture.' : 'This scene cannot get a preview picture right now. It works for AI scenes that have no clip yet.');
     const blank = targets.find((s) => !String(s.prompt || '').trim()); if (blank) throw new UserError(`Scene ${p.scenes.indexOf(blank) + 1} has no description yet. Write what should happen in it.`);
+    // Video (new): character photos keep the same face and product in every preview picture.
+    const refIds = (Array.isArray(req.body.refFileIds) ? req.body.refFileIds : []).map(String).slice(0, 4).filter((fid) => db.files.some((f) => f.id === fid && f.userId === req.user.id && f.kind === 'image'));
+    const refAsk = refIds.length ? '\n\nThe people and products in the reference pictures must look exactly the same here (same face, hair, outfit, packaging).' : '';
     const per = round2(model.price.creditsPerImage); const total = round2(per * targets.length);
     if (req.body.dryRun) return res.json({ count: targets.length, per, total, model: model.name, estimated: !!model.price.estimated });
     needCredits(req.user, total);
     const idem = typeof req.body.idem === 'string' && req.body.idem.length >= 8 ? req.body.idem.slice(0, 80) : id('i_'); let started = 0;
     for (const s of targets) {
       const key = `${idem}:${s.id}`; if (db.jobs.some((j) => j.userId === req.user.id && j.type === 'keyframe' && j.idempotencyKey === key)) continue;
-      enqueue({ type: 'keyframe', userId: req.user.id, ref: p.id, idempotencyKey: key, payload: { projectId: p.id, sceneId: s.id, modelId: model.id, prompt: ask(s.prompt, p.ratio), size: sizeFor(model, p.ratio) } }); started++;
+      enqueue({ type: 'keyframe', userId: req.user.id, ref: p.id, idempotencyKey: key, payload: { projectId: p.id, sceneId: s.id, modelId: model.id, prompt: ask(s.prompt, p.ratio) + refAsk, size: sizeFor(model, p.ratio), ...(refIds.length ? { refIds } : {}) } }); started++;
     }
     touchProject(p);
     res.json({ ...(await view(p)), started, per, total });
