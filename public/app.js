@@ -1047,7 +1047,9 @@ function renderShell() {
       h('div', { class: 'side-scroll' },
         navLink('#/chat', 'chat', 'chat', 'Chat'),
         navLink('#/image', 'image', 'image', 'Image'),
+        S.config.flags?.imageNew && navLink('#/inew', 'inew', 'image', 'Image (new)', h('span', { class: 'tag new' }, 'New')),
         navLink('#/video', 'video', 'video', S.config.flags?.videoBuilder || S.config.flags?.videoAgent ? 'Video Studio' : 'Video'),
+        S.config.flags?.videoNew && S.config.flags?.videoBuilder && navLink('#/vnew', 'vnew', 'film', 'Video (new)', h('span', { class: 'tag new' }, 'New')),
         S.config.flags?.aiVoice && navLink('#/voice', 'voice', 'mic', 'AI Voice'),
         S.config.flags?.videoAgent && S.config.flags?.videoBuilder && navLink('#/agent', 'agent', 'sparkle', 'Video Agent', paidTag()),
         S.config.flags?.videoBuilder && navLink('#/builder', 'builder', 'film', 'Video Builder', paidTag()),
@@ -1203,7 +1205,7 @@ export function pageCss(id, href) {
 function warmPageCss() {
   if (warmPageCss.done || !S.user) return; warmPageCss.done = true;
   const f = S.config?.flags || {};
-  const list = [f.videoBuilder && '/builder.css', f.studioPro && '/pro.css', f.aiVoice && '/aivoice.css'].filter(Boolean);
+  const list = [f.videoBuilder && '/builder.css', f.studioPro && '/pro.css', f.aiVoice && '/aivoice.css', f.videoNew && f.videoBuilder && '/vnew.css'].filter(Boolean);
   const go = () => list.forEach((href) => document.head.append(h('link', { rel: 'preload', as: 'style', href })));
   (window.requestIdleCallback || ((cb) => setTimeout(cb, 1500)))(go, { timeout: 3000 });
 }
@@ -1240,6 +1242,9 @@ async function route() {
   if (section === 'projects') return renderProjects(hash.split('/')[2]);
   if (section === 'characters') return renderCharacters();
   if (needsPaidPlan(section) && (section === 'builder' || section === 'agent' ? S.config.flags?.videoBuilder : S.config.flags?.studioPro)) return renderPaidOnly(section);
+  // Video (new) and Image (new): the shorter chip-based sections, beside the old pages for side-by-side testing.
+  if (section === 'vnew' && S.config.flags?.videoNew && S.config.flags?.videoBuilder) { window.__pmRecents?.(); const m = await import('./vnew.js'); const [, , a = '', b = '', c = '', d = ''] = hash.split('/'); return m.renderVnew(a, b, c, d); }
+  if (section === 'inew' && S.config.flags?.imageNew) { const m = await import('./inew.js'); return m.renderInew(hash.split('/')[2] || ''); }
   if (section === 'builder' && S.config.flags?.videoBuilder) { window.__pmRecents(); const m = await import('./builder.js'); return m.renderBuilder(hash.split('/')[2] || ''); }
   if (section === 'agent' && S.config.flags?.videoAgent && S.config.flags?.videoBuilder) { window.__pmRecents(); const m = await import('./agent.js'); return m.renderAgent(); }
   // Ad Studio is a main feature with its own address; its old address inside Studio Pro still opens it.

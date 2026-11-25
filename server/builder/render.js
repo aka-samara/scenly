@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { DATA_DIR } from '../db.js';
 import { abs, locate } from '../storage.js';
 import { ffmpeg, probe, needFfmpeg } from '../ffmpeg.js';
+import { finishArgs } from './vnewdoc.js';
 import { layout, pieces, dims, pieceArgs, xfadeArgs, concatList, concatArgs, loopMusicArgs, mixArgs, toSrt, burnArgs, cleanCaptions, MAX_PROJECT_SEC, MAX_REVERSE_SEC } from './plan.js';
 
 const TMP = path.join(DATA_DIR, 'tmp');
@@ -105,10 +106,16 @@ export async function renderProject(project, files, { resolution, burnCaptions =
       await ffmpeg(burnArgs('final.mp4', 'subs.srt', project.captionStyle, 'final-captions.mp4'), { signal, cwd: work, timeoutMs: 30 * 60 * 1000 });
       out = burned;
     }
+    // Video (new): the look and the logo in a corner, added last so changing them never remakes a scene.
+    if (!audioOnly && project.vnew) {
+      const lf = project.vnew.brand?.logoFileId && files.get(project.vnew.brand.logoFileId); const logoPath = lf && locate(lf);
+      const fin = path.join(work, 'final-finish.mp4'); const args = finishArgs(project, out, fin, logoPath && fs.existsSync(logoPath) ? logoPath : null);
+      if (args) { await ffmpeg(args, { signal, timeoutMs: 30 * 60 * 1000 }); out = fin; }
+    }
     step.tick('Finishing');
     const info = await probe(out, { signal });
     if (!info || Math.abs(info.duration - lay.seconds) > 0.35) throw Object.assign(new Error(`export length check failed: got ${info?.duration}, expected ${lay.seconds}`), { retry: true });
-    return { file: out, work, seconds: lay.seconds, measured: info.duration, width: audioOnly ? 0 : info.width, height: audioOnly ? 0 : info.height, bytes: fs.statSync(out).size, scenes: lay.rows.length, burned: out.endsWith('final-captions.mp4') };
+    return { file: out, work, seconds: lay.seconds, measured: info.duration, width: audioOnly ? 0 : info.width, height: audioOnly ? 0 : info.height, bytes: fs.statSync(out).size, scenes: lay.rows.length, burned: fs.existsSync(path.join(work, 'final-captions.mp4')) };
   } catch (e) { fs.rmSync(work, { recursive: true, force: true }); throw e; }
 }
 export const cleanWork = (dir) => { if (dir && dir.startsWith(TMP + path.sep)) fs.rmSync(dir, { recursive: true, force: true }); };

@@ -29,6 +29,7 @@ import { mountBuilder } from './builder/routes.js';
 import { mountAssist } from './builder/assist.js';
 import { mountPrecision } from './builder/precision.js';
 import { mountKeyframes } from './builder/keyframes.js';
+import { mountVnew } from './builder/vnew.js';
 import { mountPro } from './pro.js';
 import { mountAdmin } from './admin.js';
 import { trackRequest, recordFailure } from './monitor.js';
@@ -850,6 +851,7 @@ mountBuilder(app, { requireUser, requireAdmin, wrap });
 mountAssist(app, { requireUser, wrap });
 mountPrecision(app, { requireUser, wrap });
 mountKeyframes(app, { requireUser, wrap });
+mountVnew(app, { requireUser, wrap });
 mountPro(app, { requireUser, wrap, createGeneration, studioSession, convSummary, genView, publicUser, markSession });
 
 // ---------- projects ----------

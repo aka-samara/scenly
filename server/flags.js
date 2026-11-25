@@ -10,6 +10,8 @@ export const flags = () => ({
   videoExtend: on('VIDEO_EXTEND'),   // "Extend video" task: needs the ffmpeg joiner from the Video Builder step
   frameTiles: on('FRAME_TILES'),
   studioPro: on('STUDIO_PRO'),         // Studio Pro: the second image + video studio beside the existing pages (server/pro.js)
+  videoNew: on('VIDEO_NEW', true),    // Video (new): the shorter chip-based video section beside the old tools (needs the Video Builder)
+  imageNew: on('IMAGE_NEW', true),    // Image (new): the shorter chip-based picture section beside the old Image page
   avatarVideo: on('AVATAR_VIDEO'),   // OmniHuman 2.0 talking videos, direct from BytePlus (needs the BytePlus Access Key pair, or BYTEPLUS_VISION_API_KEY)
   aiVoice: on('AI_VOICE'),           // AI voice-overs from a script with Seed TTS 3.0, direct from BytePlus (needs BYTEPLUS_SPEECH_API_KEY)
   subscriptions: on('SUBSCRIPTIONS'), // monthly plans with Stripe, free trial, upgrade prompt, plan management (server/billing.js)     // First frame / last frame tiles: no model supports a last frame today
