@@ -1,0 +1,28 @@
+/* AI Voice page and the voice-over maker dialog (aivoice.js). */
+.av-page { max-width: 860px; }
+.av-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; }
+.av-maker { display: flex; flex-direction: column; gap: 10px; }
+.av-script { width: 100%; min-height: 150px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); color: var(--text); font: 15px/1.55 var(--font); padding: 12px 14px; outline: 0; box-sizing: border-box; }
+.av-script:focus { border-color: rgba(67,97,238,.5); }
+.av-maker.compact .av-script { min-height: 130px; }
+.av-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.av-row.end { justify-content: flex-end; }
+.av-row .grow { flex: 1; }
+.av-count { color: var(--faint); font-size: 12px; }
+.av-voice .tag { margin-left: 2px; }
+#av-go .cost { display: inline-flex; align-items: center; gap: 4px; padding-left: 9px; margin-left: 4px; border-left: 1px solid rgb(255 255 255 / .3); font-size: 13px; }
+#av-go .cost .i { width: 14px; height: 14px; }
+#av-go:disabled { opacity: .5; cursor: not-allowed; }
+.av-list { display: flex; flex-direction: column; gap: 8px; }
+.av-item { display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(200px, 300px) auto; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.av-ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: rgba(67,97,238,.12); color: var(--accent); }
+.av-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.av-meta small { color: var(--muted); font-size: 12px; }
+.av-item audio { width: 100%; height: 36px; }
+.av-acts { display: flex; align-items: center; gap: 6px; }
+@media (max-width: 760px) {
+  .av-item { grid-template-columns: 40px minmax(0, 1fr); }
+  .av-item audio, .av-item .av-acts { grid-column: 1 / -1; }
+  .av-acts .btn { flex: 1; justify-content: center; }
+  .av-row.end .btn { width: 100%; justify-content: center; }
+}

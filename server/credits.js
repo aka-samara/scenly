@@ -23,12 +23,22 @@ export function markupFor(discountPct) {
   return (1 - d) * m <= 1 + 1e-9 ? m : 1;
 }
 
+// Models bought straight from the provider (not through AICredit) are priced from the official list price.
+// DIRECT_MARGIN_PCT is the margin on top of it (0 = official price). Ids are registered by the catalog.
+export const DIRECT_MARGIN_PCT = () => { const v = Number(process.env.DIRECT_MARGIN_PCT ?? 5); return Number.isFinite(v) && v >= 0 ? v : 5; };
+const directIds = new Set();
+export const registerDirect = (mid) => directIds.add(mid);
+export const directMarkup = () => 1 + DIRECT_MARGIN_PCT() / 100;
+
 // Model id -> AICredit discount, filled by the catalog each time it loads, so a charge only needs the model.
 const discounts = new Map();
 export const setDiscounts = (models) => { discounts.clear(); for (const m of models) discounts.set(m.id, Number(m.discountPct) || 0); };
 // model: a catalog model, a model id or a number (discount %). Unknown models get the plain margin.
 export function markupOf(model) {
   if (typeof model === 'number') return markupFor(model);
+  if (model && typeof model === 'object' && model.direct) return directMarkup();
+  const did = typeof model === 'string' ? model : model?.id;
+  if (did && directIds.has(did)) return directMarkup();
   if (model && typeof model === 'object' && model.discountPct != null) return markupFor(model.discountPct);
   const mid = typeof model === 'string' ? model : model?.id;
   return mid && discounts.has(mid) ? markupFor(discounts.get(mid)) : 1 + MARGIN_PCT() / 100;

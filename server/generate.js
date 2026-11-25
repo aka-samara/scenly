@@ -11,6 +11,7 @@ import { getFiles, dataUrl, filePath, fileMeta } from './files.js';
 import { callJson, GatewayError, tidyProviderText } from './gateway.js';
 import { recordFailure } from './monitor.js';
 import { keys, put, exists, bucketUrl } from './storage.js';
+import { startAvatar, avatarStatus } from './avatar.js';
 
 export class UserError extends Error {
   constructor(message, status = 400, code) { super(message); this.status = status; this.code = code; }
@@ -252,6 +253,11 @@ export function videoParams(model, q, { strict = false } = {}) {
 export async function startVideo(user, { modelId, prompt, fileIds = [], videoUrl, count = 1, params: q = {}, target, strict = false, task }) {
   const model = await findModel(modelId);
   if (!model || model.type !== 'video') throw new UserError('Pick a video model.');
+  // Talking videos (a photo and a voice) have their own path: the length comes from the voice.
+  if (model.direct === 'omnihuman') {
+    if (task && task !== 'create') throw new UserError(`${model.name} cannot do that. Pick another model, or another task for this model.`);
+    return startAvatar(user, { model, prompt, fileIds, params: q, target });
+  }
   if (!String(prompt).trim()) throw new UserError('Describe the video you want.');
   const v = model.video;
   count = Math.max(1, Math.min(4, Number(count) || 1));
@@ -315,7 +321,7 @@ export async function pollTask(t) {
   if (t.status !== 'pending' || t.polling) return;
   t.polling = true;
   try {
-    const j = await callJson('/videos/generations/' + encodeURIComponent(t.taskId), { method: 'GET' });
+    const j = t.provider === 'omnihuman' ? await avatarStatus(t) : await callJson('/videos/generations/' + encodeURIComponent(t.taskId), { method: 'GET' });
     const user = db.users.find((u) => u.id === t.userId);
     const rec = settleTarget(t);
     if (rec) rec.progress = j.status;

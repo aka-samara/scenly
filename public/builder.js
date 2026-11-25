@@ -13,7 +13,7 @@ const r2 = (n) => Math.round(n * 100) / 100;
 const fmtT = (s) => { s = Math.max(0, s || 0); const m = Math.floor(s / 60); const r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(1)}`; };
 const fmtLen = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${r2(s)} s`);
 const newId = () => 'sc_' + Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
-const videoModels = () => S.models.filter((m) => m.type === 'video' && m.video?.tasks?.includes('create'));
+const videoModels = () => S.models.filter((m) => m.type === 'video' && m.video?.tasks?.includes('create') && !m.video.avatar); // talking avatars need a voice: Video Studio only
 const mName = (m) => m.name + (m.tag ? ' · ' + m.tag : '');
 const typing = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable;
 const TYPE = { ai: 'AI scene', video: 'Video', image: 'Picture' };
@@ -709,7 +709,7 @@ function drawTimeline() {
       h('button', { class: 'icon-btn sm', id: 'vb-zin', title: 'Zoom in', onclick: () => setZoom(B.zoom * 1.4) }, '+'),
       h('button', { class: 'btn ghost sm' + (B.autoZoom !== false ? ' on' : ''), id: 'vb-zfit', title: 'Show the whole video', onclick: () => { B.autoZoom = true; drawTimeline(); } }, 'Fit'), info(HELP.zoom)),
     h('div', { class: 'vb-th v' }, icon('video'), h('b', {}, 'Video'), h('div', { class: 'grow' }), h('button', { class: 'icon-btn sm' + (B.snap ? ' on' : ''), id: 'vb-snap', title: 'Snapping: ' + (B.snap ? 'on' : 'off') + '. ' + HELP.snap, onclick: () => { B.snap = !B.snap; drawTimeline(); } }, '⌖'), h('button', { class: 'icon-btn sm', id: 'vb-tsplit', title: 'Split at the playhead (S)', onclick: splitAtPlayhead }, icon('cut'))),
-    h('div', { class: 'vb-th a' }, icon('mic'), h('b', {}, 'Voice'), info(HELP.voice), h('div', { class: 'grow' }), vo ? [INFO.audioFirst && h('button', { class: 'btn ghost sm', id: 'vb-plan', title: 'Plan scenes from what is said in the voice-over', onclick: planFromVoice }, icon('wand'), 'Plan'), vol(B.p.voice, 'volume', 'vb-vvol'), h('button', { class: 'icon-btn sm', id: 'vb-vmenu', title: 'Voice-over options', onclick: (e) => audioMenu(e.currentTarget, 'voice') }, icon('dots'))] : h('button', { class: 'btn ghost sm', id: 'vb-vadd', onclick: () => pickAudio('voice') }, icon('plus'), 'Add')),
+    h('div', { class: 'vb-th a' }, icon('mic'), h('b', {}, 'Voice'), info(HELP.voice), h('div', { class: 'grow' }), vo ? [INFO.audioFirst && h('button', { class: 'btn ghost sm', id: 'vb-plan', title: 'Plan scenes from what is said in the voice-over', onclick: planFromVoice }, icon('wand'), 'Plan'), vol(B.p.voice, 'volume', 'vb-vvol'), h('button', { class: 'icon-btn sm', id: 'vb-vmenu', title: 'Voice-over options', onclick: (e) => audioMenu(e.currentTarget, 'voice') }, icon('dots'))] : h('button', { class: 'btn ghost sm', id: 'vb-vadd', onclick: (e) => (S.config.flags?.aiVoice ? voiceAddMenu(e.currentTarget) : pickAudio('voice')) }, icon('plus'), 'Add')),
     h('div', { class: 'vb-th a' }, icon('audio'), h('b', {}, 'Music'), info(HELP.music), h('div', { class: 'grow' }), mu ? [vol(B.p.music, 'volume', 'vb-mvol'), h('button', { class: 'icon-btn sm', id: 'vb-mmenu', title: 'Music options', onclick: (e) => audioMenu(e.currentTarget, 'music') }, icon('dots'))] : h('button', { class: 'btn ghost sm', id: 'vb-madd', onclick: () => openMusic() }, icon('plus'), 'Add')),
     h('div', { class: 'vb-th c' }, icon('type'), h('b', {}, 'Captions'), info(HELP.captions), h('div', { class: 'grow' }), h('button', { class: 'icon-btn sm', id: 'vb-cstyle', title: 'Caption look', onclick: (e) => popover(e.currentTarget, h('div', { class: 'menu' }, INFO.captionStyles.map((c) => h('button', { class: c.id === B.p.captionStyle ? 'on' : '', onclick: () => { closePop(); edit((p) => { p.captionStyle = c.id; }); } }, c.label)))) }, icon('palette')), h('button', { class: 'btn ghost sm', id: 'vb-cadd', title: 'Add a caption at the playhead', onclick: addCaption }, icon('plus'), 'Add')));
   const tracks = h('div', { class: 'vb-tracks', id: 'vb-tracks', style: { width: width + 'px' } },
@@ -723,6 +723,27 @@ function setZoom(z) { B.autoZoom = false; const sc = $('#vb-scroll'); const mid 
 
 // ---------- voice-over, music, captions ----------
 function pickAudio(as) { pickFiles('audio/*,.mp3,.wav,.m4a', false, (files) => addFiles(files, { audioAs: as })); }
+// A voice-over is a recording, or a script read by an AI voice (AI Voice, aivoice.js).
+function voiceAddMenu(anchor) {
+  popover(anchor, h('div', { class: 'menu' },
+    h('button', { id: 'vb-vrec', onclick: () => { closePop(); pickAudio('voice'); } }, icon('upload'), 'Upload or pick a recording'),
+    h('button', { id: 'vb-vai', onclick: () => { closePop(); makeAiVoice(); } }, icon('mic'), 'Make one with AI voice')));
+}
+async function makeAiVoice() {
+  if (!B) return;
+  // The scenes' "what is said" notes, in order, are a good first draft of the script.
+  const draft = B.p.scenes.map((s) => String(s.narration || '').trim()).filter(Boolean).join('\n');
+  const { openVoiceDialog } = await import('./aivoice.js');
+  openVoiceDialog({ text: draft, cta: B.p.voice ? 'Replace the voice-over' : 'Add voice-over', onMade: async (f) => {
+    if (!B) return;
+    try {
+      await flush();
+      const r = await call('POST', `/api/builder/projects/${B.id}/add`, { fileIds: [f.id], audioAs: 'voice' });
+      if (!r.ok) throw fail(r);
+      adopt(r.data, false); draw('all'); toast('Voice-over added. Drag it on the Voice track to move where it starts.');
+    } catch (e) { errToast(e); }
+  } });
+}
 function audioMenu(anchor, k) {
   const t = B.p[k]; const item = (ic, text, fn) => h('button', { onclick: () => { closePop(); fn(); } }, icon(ic), text);
   const sw = (label, help, on, fn, id) => h('div', { class: 'vb-mi' }, lab(label, help), toggle(on, (e) => { fn(); e.currentTarget.classList.toggle('on'); }, id));
@@ -736,6 +757,7 @@ function audioMenu(anchor, k) {
     k === 'voice' && INFO.audioFirst && B.p.audioPlan && item('list', 'Show the last scene plan', () => reviewPlan(B.p.audioPlan.plan)),
     k === 'music' && INFO.beatSync && item('audio', 'Cut to the beat', cutToBeat),
     item('swap', k === 'music' ? 'Choose other music' : 'Replace the voice-over', () => (k === 'music' ? openMusic() : pickAudio('voice'))),
+    k === 'voice' && S.config.flags?.aiVoice && item('mic', 'Make a new one with AI voice', makeAiVoice),
     item('trash', 'Remove', () => edit((p) => { p[k] = null; }))));
 }
 function addCaption() {
