@@ -5,14 +5,26 @@ import assert from 'node:assert/strict';
 
 const env = (vars, fn) => async () => { const old = {}; for (const k in vars) { old[k] = process.env[k]; if (vars[k] == null) delete process.env[k]; else process.env[k] = vars[k]; } try { await fn(); } finally { for (const k in old) { if (old[k] == null) delete process.env[k]; else process.env[k] = old[k]; } } };
 
-test('OmniHuman is hidden unless the flag is on and the key is set', env({ FEATURE_AVATAR_VIDEO: '1', BYTEPLUS_VISION_API_KEY: null }, async () => {
+test('OmniHuman is hidden unless the flag is on and a credential is set', env({ FEATURE_AVATAR_VIDEO: '1', BYTEPLUS_VISION_API_KEY: null, BYTEPLUS_ACCESS_KEY_ID: null, BYTEPLUS_SECRET_ACCESS_KEY: null }, async () => {
   const { directModels } = await import('../server/catalog.js');
   assert.equal(directModels().length, 0);
   process.env.BYTEPLUS_VISION_API_KEY = 'k'; process.env.FEATURE_AVATAR_VIDEO = '0';
   assert.equal(directModels().length, 0);
 }));
 
-test('OmniHuman is priced at the official $0.07 per second plus the direct margin', env({ FEATURE_AVATAR_VIDEO: '1', BYTEPLUS_VISION_API_KEY: 'k', DIRECT_MARGIN_PCT: null, CREDIT_USD: null }, async () => {
+test('An Access Key pair also switches OmniHuman on, and is signed the way BytePlus expects', env({ FEATURE_AVATAR_VIDEO: '1', BYTEPLUS_VISION_API_KEY: null, BYTEPLUS_ACCESS_KEY_ID: 'test-ak', BYTEPLUS_SECRET_ACCESS_KEY: 'test-sk' }, async () => {
+  const { directModels } = await import('../server/catalog.js');
+  const { visionAuthKind, signedRequest } = await import('../server/byteplus.js');
+  assert.equal(visionAuthKind(), 'access-key');
+  assert.equal(directModels().length, 1, 'the model shows with an Access Key pair alone');
+  // Signature compared against the official byteplus-sdk (SignerV4) for this exact body, date and credentials.
+  const body = '{"req_key":"realman_avatar_picture_omni20_cv","image_urls":["http://x/p.jpg"],"audio_url":"http://x/a.mp3","enable_watermark":false}';
+  const r = signedRequest('CVSync2AsyncSubmitTask', body, new Date('2026-11-25T05:00:00Z'));
+  assert.equal(r.url, 'https://cv.byteplusapi.com/?Action=CVSync2AsyncSubmitTask&Version=2024-06-06');
+  assert.equal(r.headers.Authorization, 'HMAC-SHA256 Credential=test-ak/20261125/ap-singapore-1/cv/request, SignedHeaders=content-type;host;x-content-sha256;x-date, Signature=6adc1e1a58326a88587ec02ec521dfcc833e62b22191b74bf0c04c9628c65964');
+}));
+
+test('OmniHuman is priced at the official $0.07 per second plus the direct margin', env({ FEATURE_AVATAR_VIDEO: '1', BYTEPLUS_VISION_API_KEY: 'k', BYTEPLUS_ACCESS_KEY_ID: null, BYTEPLUS_SECRET_ACCESS_KEY: null, DIRECT_MARGIN_PCT: null, CREDIT_USD: null }, async () => {
   const { directModels } = await import('../server/catalog.js');
   const [m] = directModels();
   assert.equal(m.id, 'omnihuman-2.0');

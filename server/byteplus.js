@@ -4,6 +4,7 @@
 // Each service has its own API key, set on the server only. People never see the supplier: OmniHuman sits in the
 // normal video model list and the voice tool is simply "AI voice".
 // API facts checked against docs.byteplus.com on 2026-11-24 (see the project memory note byteplus-direct-api).
+import crypto from 'node:crypto';
 import { flags } from './flags.js';
 import { userWords, gatewayLog } from './gateway.js';
 
@@ -14,6 +15,7 @@ const speechKey = () => process.env.BYTEPLUS_SPEECH_API_KEY || '';
 
 export const OMNI_REQ_KEY = 'realman_avatar_picture_omni20_cv';
 export const OMNI_ID = 'omnihuman-2.0';
+export const OMNI_API_VERSION = process.env.BYTEPLUS_VISION_API_VERSION || '2024-06-06';
 export const TTS_MODEL = () => process.env.BYTEPLUS_TTS_MODEL || 'dola-seed-tts-3.0';
 
 // Official prices (USD). OmniHuman 2.0: $0.07 per second of video. Seed TTS 3.0: $20 per million characters.
@@ -22,7 +24,7 @@ export const TTS_USD_PER_MCHAR = () => Number(process.env.SEED_TTS_USD_PER_MCHAR
 export const OMNI_AUDIO = { min: 4, max: 300, maxMb: 15 };
 export const TTS_MAX_CHARS = 10000;
 
-export const avatarOn = () => flags().avatarVideo && !!visionKey();
+export const avatarOn = () => flags().avatarVideo && !!visionAuthKind();
 export const aiVoiceOn = () => flags().aiVoice && !!speechKey();
 
 export class ProviderError extends Error {
@@ -30,19 +32,66 @@ export class ProviderError extends Error {
 }
 
 // ---------- OmniHuman (Vision AI) ----------
+// Two ways in, whichever pair of settings is present:
+//  - Access Key: the standard BytePlus cloud credential (AK + SK), each request signed. This is what the console's
+//    sample code and most Vision AI accounts use, so it is tried first.
+//  - API Key: a single Bearer token, where the account has one for Vision AI.
+// Both speak the same JSON: success is code 10000, data holds the task.
+const visionAk = () => process.env.BYTEPLUS_ACCESS_KEY_ID || '';
+const visionSk = () => process.env.BYTEPLUS_SECRET_ACCESS_KEY || '';
+const VISION_REGION = () => process.env.BYTEPLUS_VISION_REGION || 'ap-singapore-1';
+const VISION_SIGNED_BASE = () => (process.env.BYTEPLUS_VISION_SIGNED_BASE_URL || process.env.BYTEPLUS_VISION_BASE_URL || 'https://cv.byteplusapi.com').replace(/\/$/, '');
+const signedRoute = () => !!(visionAk() && visionSk()) && !visionKey();
+export const visionAuthKind = () => (signedRoute() ? 'access-key' : visionKey() ? 'api-key' : null);
+
+const hex = (b) => Buffer.from(b).toString('hex');
+const sha256 = (s) => hex(crypto.createHash('sha256').update(s).digest());
+const hmac = (k, s) => crypto.createHmac('sha256', k).update(s).digest();
+
+// The BytePlus cloud signature (the same shape as AWS SigV4, with its own names).
+export function signedRequest(action, bodyText, date = new Date()) {
+  const url = new URL(VISION_SIGNED_BASE() + '/');
+  const query = `Action=${action}&Version=${encodeURIComponent(OMNI_API_VERSION)}`;
+  const t = date.toISOString().replace(/[-:]|\.\d{3}/g, '');
+  const day = t.slice(0, 8);
+  const payload = sha256(bodyText);
+  const headers = { 'content-type': 'application/json', host: url.host, 'x-content-sha256': payload, 'x-date': t };
+  const names = Object.keys(headers).sort();
+  const canon = ['POST', '/', query, ...names.map((n) => `${n}:${headers[n]}`), '', names.join(';'), payload].join('\n');
+  const scope = `${day}/${VISION_REGION()}/cv/request`;
+  const toSign = ['HMAC-SHA256', t, scope, sha256(canon)].join('\n');
+  const key = hmac(hmac(hmac(hmac(visionSk(), day), VISION_REGION()), 'cv'), 'request');
+  const sig = hex(hmac(key, toSign));
+  return {
+    url: `${url.origin}/?${query}`,
+    headers: { ...headers, Authorization: `HMAC-SHA256 Credential=${visionAk()}/${scope}, SignedHeaders=${names.join(';')}, Signature=${sig}` },
+  };
+}
+
+// One call to Vision AI, by whichever route the settings ask for.
+function visionCall(action, path, body) {
+  const text = JSON.stringify(body);
+  if (signedRoute()) {
+    const s = signedRequest(action, text);
+    return fetch(s.url, { method: 'POST', headers: s.headers, body: text, signal: AbortSignal.timeout(30000) });
+  }
+  return fetch(VISION_BASE() + path, { method: 'POST', headers: { Authorization: `Bearer ${visionKey()}`, 'Content-Type': 'application/json' }, body: text, signal: AbortSignal.timeout(30000) });
+}
+
 // Success is code 10000. 50429/50430 are rate limits, 50500/50501 are worth one retry, 50510 is the content filter.
 function visionError(j, status) {
   const code = Number(j?.code) || status;
-  gatewayLog(status === 401 || code === 50400 ? 'BytePlus Vision key refused (check BYTEPLUS_VISION_API_KEY)' : 'BytePlus Vision said', code, j?.message || JSON.stringify(j || '').slice(0, 300));
+  const refused = status === 401 || status === 403 || code === 50400 || code === 100004;
+  gatewayLog(refused ? `BytePlus Vision credentials refused (${visionAuthKind() === 'access-key' ? 'BYTEPLUS_ACCESS_KEY_ID / BYTEPLUS_SECRET_ACCESS_KEY' : 'BYTEPLUS_VISION_API_KEY'})` : 'BytePlus Vision said', code, j?.message || JSON.stringify(j || '').slice(0, 300));
   const kind = code === 50429 || code === 50430 ? 'crowded' : code === 50510 ? 'blocked' : 'busy';
   return new ProviderError(userWords(kind), code === 50429 || code === 50430 ? 429 : 502, String(code));
 }
-async function vision(path, body, { tries = 2 } = {}) {
+async function vision(action, path, body, { tries = 2 } = {}) {
   let last;
   for (let i = 0; i < tries; i++) {
     let r, j;
     try {
-      r = await fetch(VISION_BASE() + path, { method: 'POST', headers: { Authorization: `Bearer ${visionKey()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
+      r = await visionCall(action, path, body);
       j = await r.json().catch(() => null);
     } catch (e) { gatewayLog('BytePlus Vision network', '', e.message); last = new ProviderError(userWords('busy'), 502, 'network'); continue; }
     if (r.ok && Number(j?.code) === 10000) return j.data || {};
@@ -56,7 +105,7 @@ async function vision(path, body, { tries = 2 } = {}) {
 export async function omniSubmit({ imageUrl, audioUrl, prompt }) {
   const body = { req_key: OMNI_REQ_KEY, image_urls: [imageUrl], audio_url: audioUrl, enable_watermark: false };
   if (prompt && String(prompt).trim()) body.prompt = String(prompt).trim().slice(0, 2000);
-  const d = await vision('/api/common/v3/submit_task_v2', body);
+  const d = await vision('CVSync2AsyncSubmitTask', '/api/common/v3/submit_task_v2', body);
   if (!d.task_id) throw new ProviderError(userWords('busy'), 502, 'no_task');
   return String(d.task_id);
 }
@@ -65,7 +114,7 @@ export async function omniSubmit({ imageUrl, audioUrl, prompt }) {
 export async function omniResult(taskId) {
   let r, j;
   try {
-    r = await fetch(VISION_BASE() + '/api/common/v3/get_result_v2', { method: 'POST', headers: { Authorization: `Bearer ${visionKey()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ req_key: OMNI_REQ_KEY, task_id: String(taskId) }), signal: AbortSignal.timeout(30000) });
+    r = await visionCall('CVSync2AsyncGetResult', '/api/common/v3/get_result_v2', { req_key: OMNI_REQ_KEY, task_id: String(taskId) });
     j = await r.json().catch(() => null);
   } catch (e) { return { status: 'pending', note: e.message }; }
   const code = Number(j?.code);
