@@ -466,7 +466,7 @@ ${paidNote('Video Agent')}
 <li><b>Length</b>: from 15 seconds to 5 minutes. The video is planned as scenes the video model can make.</li>
 <li><b>Style</b>: one look that every scene keeps.</li>
 <li><b>Language</b>: for the narration and the title.</li>
-<li><b>Voice-over script</b>: writes what the voice says in each scene. Scenly cannot speak it for you yet, so record it or upload one in the Builder.</li>
+<li><b>Voice-over script</b>: writes what the voice says in each scene. Turn it into a voice-over with AI Voice, or record and upload your own in the Builder.</li>
 <li><b>Keep Visual Continuity (Chain Scenes)</b>: each scene starts from the last picture of the scene before, so people, places and light stay the same.</li>
 <li><b>Music</b>: adds a track with that mood from the music library.</li>
 </ul>
@@ -515,7 +515,7 @@ ${paidNote('Video Builder')}
 </ul>
 <h2 id="sound">Voice-over, music and captions</h2>
 <ul>
-<li><b>Voice-over</b>: upload a recording. Scenly can plan scenes from what is said, and put each spoken phrase on the Captions track.</li>
+<li><b>Voice-over</b>: upload a recording, or make one with AI Voice from a script. Scenly can plan scenes from what is said, and put each spoken phrase on the Captions track.</li>
 <li><b>Music</b>: pick from the music library or upload your own (MP3, WAV or M4A, up to 20 minutes). It loops or shortens to fit, fades in and out, and is lowered while the voice speaks.</li>
 <li><b>Captions</b>: add captions at the playhead, double-click to change the words, drag to move them. Choose a caption look, add titles, lower thirds and an end card.</li>
 </ul>
@@ -773,7 +773,7 @@ ${note('Your browser asks for permission to use the microphone the first time. I
 <h2 id="where">Where is the thing I made?</h2>
 <p>In <a href="#/help/assets-recents">Assets</a> (every picture, video and sound) and in Recents in the sidebar.</p>
 <h2 id="voice">Can Scenly speak a voice-over for me?</h2>
-<p>Not yet. Video Agent can write the voice-over script; record or upload the voice in the Video Builder.</p>
+<p>Yes. Open <b>AI Voice</b>, type or paste your script, pick a voice and press <b>Make voice-over</b>. Voices are grouped by language: pick one from your language (Italian, Spanish, Chinese, Japanese and more) for a native accent. Under <b>Adjust how it sounds</b> you can change the speech rate, volume and tone, and write a short note on how to read it, such as "slowly and warmly". The voice-over is saved to your files, so you can use it in the Video Builder or to make a photo talk.</p>
 <h2 id="phone">Does it work on a phone?</h2>
 <p>Yes. Scenly works in the browser on phones and tablets, with a tab bar at the bottom. See <a href="#/help/find-your-way">Finding your way around</a>.</p>
 <h2 id="privacy">What happens to my data?</h2>

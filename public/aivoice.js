@@ -1,6 +1,6 @@
 // AI Voice: type a script, pick a voice, get a voice-over (an MP3 in your files). The same maker opens as a dialog in
 // the Video Builder voice track, and a finished voice-over can make a photo talk in Video Studio.
-import { h, $, icon, S, api, toast, errToast, popover, closePop, dialog, topbar, fmtCredits, setCredits, voiceList, loadVoices, playSample, saveStudio, isAvatar, pageCss } from './app.js';
+import { h, $, icon, S, api, toast, errToast, popover, closePop, dialog, topbar, fmtCredits, setCredits, voiceList, voiceTweaks, voiceTweakLabel, loadVoices, playSample, saveStudio, isAvatar, pageCss } from './app.js';
 
 const perChar = () => S.voices?.creditsPerChar ?? 0.021;
 const maxChars = () => S.voices?.maxChars ?? 10000;
@@ -9,10 +9,12 @@ const remember = (v) => { try { localStorage.setItem(LAST, JSON.stringify(v)); }
 const last = () => { try { return JSON.parse(localStorage.getItem(LAST) || '{}'); } catch { return {}; } };
 const fmtLen = (s) => (!s ? '' : s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : `${Math.round(s)}s`);
 
-// The script box, voice and speed, with the price as you type. Calls onMade(file) with the new sound file.
+// The script box, voice and how it sounds, with the price as you type. Calls onMade(file) with the new sound file.
 function maker({ text = '', cta = 'Make voice-over', onMade, compact = false }) {
   const prev = last();
-  const st = { voiceId: prev.voiceId && S.voices?.voices?.some((v) => v.id === prev.voiceId) ? prev.voiceId : S.voices?.defaultVoice, speed: prev.speed || 1, busy: false };
+  const st = { voiceId: prev.voiceId && S.voices?.voices?.some((v) => v.id === prev.voiceId) ? prev.voiceId : S.voices?.defaultVoice, ...voiceTweaks(prev), busy: false };
+  const tweaks = () => voiceTweaks(st);
+  const keep = () => remember({ voiceId: st.voiceId, ...tweaks() });
   const voice = () => S.voices?.voices?.find((v) => v.id === st.voiceId);
   const ta = h('textarea', { class: 'av-script', id: 'av-script', rows: compact ? 6 : 7, maxlength: maxChars(), placeholder: 'Type or paste your script. Add tags like [happy], [whispering] or [laughs] to direct how it is read.' });
   ta.value = text;
@@ -20,7 +22,7 @@ function maker({ text = '', cta = 'Make voice-over', onMade, compact = false }) 
   const cost = h('span', { id: 'av-cost' });
   const vbtn = h('button', { class: 'chipbtn av-voice', id: 'av-voice', onclick: (e) => openPicker(e.currentTarget) });
   const go = h('button', { class: 'btn primary', id: 'av-go', onclick: () => make() }, icon('mic'), cta, h('span', { class: 'cost' }, icon('bolt'), cost));
-  const drawVoice = () => { const v = voice(); vbtn.replaceChildren(...[icon('mic'), h('span', { class: 'nm' }, v ? `${v.name} · ${v.accent}` : 'Pick a voice'), st.speed !== 1 && h('span', { class: 'tag dim' }, st.speed < 1 ? 'Slower' : 'Faster'), icon('down')].filter(Boolean)); };
+  const drawVoice = () => { const v = voice(); vbtn.replaceChildren(...[icon('mic'), h('span', { class: 'nm' }, v ? `${v.name} · ${v.accent}` : 'Pick a voice'), voiceTweakLabel(st) && h('span', { class: 'tag dim' }, voiceTweakLabel(st)), icon('down')].filter(Boolean)); };
   const sync = () => {
     const n = ta.value.trim().length;
     count.textContent = `${n.toLocaleString()} / ${maxChars().toLocaleString()} characters${n ? ` · about ${fmtLen(Math.max(1, n / 15 / st.speed))}` : ''}`;
@@ -29,13 +31,13 @@ function maker({ text = '', cta = 'Make voice-over', onMade, compact = false }) 
   };
   const openPicker = (anchor) => popover(anchor, h('div', { class: 'menu voice-menu' },
     h('div', { class: 'menu-head' }, 'VOICE'),
-    voiceList({ value: st.voiceId, speed: st.speed, onPick: (v) => { closePop(); st.voiceId = v.id; remember({ voiceId: st.voiceId, speed: st.speed }); drawVoice(); }, onSpeed: (n) => { st.speed = n; remember({ voiceId: st.voiceId, speed: st.speed }); drawVoice(); sync(); } }),
+    voiceList({ value: st.voiceId, settings: tweaks(), onPick: (v) => { closePop(); st.voiceId = v.id; keep(); drawVoice(); }, onSettings: (t) => { Object.assign(st, t); keep(); drawVoice(); sync(); } }),
   ), 'below');
   async function make() {
     const t = ta.value.trim(); if (!t || st.busy) return;
     st.busy = true; sync(); go.classList.add('busy'); go.firstChild.replaceWith(h('span', { class: 'spin' }));
     try {
-      const r = await api('/api/voice/speak', { method: 'POST', body: { text: t, voiceId: st.voiceId, speed: st.speed }, timeoutMs: 150000 });
+      const r = await api('/api/voice/speak', { method: 'POST', body: { text: t, voiceId: st.voiceId, ...tweaks() }, timeoutMs: 150000 });
       setCredits(r.balance);
       await onMade?.(r.file, { text: t });
     } catch (e) { errToast(e); }
