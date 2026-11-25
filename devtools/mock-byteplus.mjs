@@ -5,6 +5,7 @@
 // "FAILVOICE" gets an error event. OmniHuman: tasks stay in_queue, then generating, then done with a small MP4.
 // A prompt containing "FAILVIDEO" ends with the content-filter error (50510).
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,13 +18,29 @@ const ff = (a) => execFileSync('ffmpeg', ['-y', '-v', 'error', ...a]);
 ff(['-f', 'lavfi', '-i', 'testsrc2=size=720x1280:rate=24:duration=3', '-f', 'lavfi', '-i', 'sine=frequency=330:duration=3', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', tmp + '/out.mp4']);
 const log = (x) => fs.appendFileSync(LOG, JSON.stringify({ at: new Date().toISOString(), ...x }) + '\n');
 const tasks = new Map(); let n = 0;
-const body = (req) => new Promise((ok) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch { ok({}); } }); });
+const body = (req) => new Promise((ok) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => { let j = {}; try { j = JSON.parse(b || '{}'); } catch { /* not json */ } ok({ raw: b, json: j }); }); });
+const hex = (x) => Buffer.from(x).toString('hex');
+const sha = (s) => hex(crypto.createHash('sha256').update(s).digest());
+const hmac = (k, s) => crypto.createHmac('sha256', k).update(s).digest();
+// Rebuild the BytePlus signature from the request and compare it with the one sent.
+function checkSignature(req, url, raw) {
+  const auth = req.headers.authorization || '';
+  const m = auth.match(/^HMAC-SHA256 Credential=([^/]+)\/(\S+?), SignedHeaders=(\S+?), Signature=([0-9a-f]+)$/);
+  if (!m || m[1] !== 'test-ak') return false;
+  const [, , scope, names, sig] = m;
+  const t = req.headers['x-date'] || '';
+  const lines = names.split(';').map((n) => `${n}:${req.headers[n]}`);
+  const canon = ['POST', '/', url.search.slice(1), ...lines, '', names, sha(raw)].join('\n');
+  const [day, region, service] = scope.split('/');
+  const key = hmac(hmac(hmac(hmac('test-sk', day), region), service), 'request');
+  return hex(hmac(key, ['HMAC-SHA256', t, scope, sha(canon)].join('\n'))) === sig;
+}
 const json = (res, code, j) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(j)); };
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'GET' && url.pathname === '/video.mp4') { res.writeHead(200, { 'Content-Type': 'video/mp4' }); return fs.createReadStream(tmp + '/out.mp4').pipe(res); }
-  const b = await body(req);
+  const { raw, json: b } = await body(req);
   // ---- Seed TTS 3.0
   const tts = url.pathname.match(/^\/api\/v3\/text-to-speech\/([^/]+)\/streaming$/);
   if (tts) {
@@ -39,18 +56,25 @@ http.createServer(async (req, res) => {
     res.write(JSON.stringify({ event: 'audio', audio: audio.subarray(half).toString('base64') }) + '\n');
     return res.end(JSON.stringify({ event: 'final', reason: 'TTS_STREAM_FINAL_REASON_CLOSED', is_final: true }) + '\n');
   }
-  // ---- OmniHuman 2.0 (Vision AI, Bearer API key)
-  if (url.pathname.startsWith('/api/common/v3/')) {
-    log({ kind: 'vision', path: url.pathname, auth: req.headers.authorization, body: b });
-    if (req.headers.authorization !== 'Bearer test-vision-key') return json(res, 200, { code: 50400, data: null, message: 'Access Denied: Access Denied', status: 50400 });
+  // ---- OmniHuman 2.0 (Vision AI). Two routes: Bearer API key on /api/common/v3/..., or the signed Access Key
+  // route on /?Action=CVSync2AsyncSubmitTask. The signed route is checked by rebuilding the signature with test-sk.
+  const action = url.searchParams.get('Action');
+  let path = url.pathname, signedOk = false;
+  if (url.pathname === '/' && action) {
+    path = action === 'CVSync2AsyncSubmitTask' ? '/api/common/v3/submit_task_v2' : '/api/common/v3/get_result_v2';
+    signedOk = checkSignature(req, url, raw);
+  }
+  if (path.startsWith('/api/common/v3/')) {
+    log({ kind: 'vision', path, action, auth: req.headers.authorization, body: b });
+    if (action ? !signedOk : req.headers.authorization !== 'Bearer test-vision-key') return json(res, 200, { code: 50400, data: null, message: 'Access Denied: Access Denied', status: 50400 });
     if (b.req_key !== 'realman_avatar_picture_omni20_cv') return json(res, 200, { code: 50215, data: null, message: 'Input invalid for this service.' });
-    if (url.pathname.endsWith('/submit_task_v2')) {
+    if (path.endsWith('/submit_task_v2')) {
       if (!b.audio_url || !Array.isArray(b.image_urls) || !b.image_urls[0]) return json(res, 200, { code: 50215, data: null, message: 'Input invalid for this service.' });
       const id = String(7000000000000000000n + BigInt(++n));
       tasks.set(id, { polls: 0, fail: /FAILVIDEO/.test(b.prompt || '') });
       return json(res, 200, { code: 10000, data: { task_id: id }, message: 'Success', status: 10000 });
     }
-    if (url.pathname.endsWith('/get_result_v2')) {
+    if (path.endsWith('/get_result_v2')) {
       const t = tasks.get(String(b.task_id));
       if (!t) return json(res, 200, { code: 10000, data: { status: 'not_found' }, message: 'Success' });
       t.polls++;

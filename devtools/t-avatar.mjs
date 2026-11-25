@@ -3,6 +3,7 @@
 //   node devtools/mock-byteplus.mjs 3291 /tmp/pmd/mbp.jsonl
 //   MAIL_OUTBOX=1 RATE_LIMITS=0 FEATURE_VIDEO_BUILDER=1 FEATURE_AVATAR_VIDEO=1 FEATURE_AI_VOICE=1 \
 //   BYTEPLUS_VISION_API_KEY=test-vision-key BYTEPLUS_SPEECH_API_KEY=test-speech-key \
+//   (or the signed route: BYTEPLUS_ACCESS_KEY_ID=test-ak BYTEPLUS_SECRET_ACCESS_KEY=test-sk, no vision API key) \
 //   BYTEPLUS_VISION_BASE_URL=http://localhost:3291 BYTEPLUS_SPEECH_BASE_URL=http://localhost:3291 \
 //   PUBLIC_URL=https://scenly.test DATA_DIR=/tmp/pmd PORT=3111 node server/index.js
 // Usage: DATA_DIR=/tmp/pmd node devtools/t-avatar.mjs <out folder>   (SCALE=2 for sharp pictures)
@@ -81,7 +82,7 @@ r = await J('/api/generate', 'POST', { idem: 'a1' + Date.now(), mode: 'video', m
 ok(r.generation?.status === 'pending', 'a talking video starts from a photo and a script');
 const secs = r.generation?.params?.duration;
 const sub = mockLog().filter((x) => x.kind === 'vision' && x.path.endsWith('submit_task_v2')).pop();
-ok(sub?.auth === 'Bearer test-vision-key' && sub.body.req_key === 'realman_avatar_picture_omni20_cv' && sub.body.enable_watermark === false, 'the video request uses the key, the OmniHuman 2.0 service and no watermark');
+ok(/^(Bearer test-vision-key|HMAC-SHA256 Credential=test-ak\/)/.test(sub?.auth || '') && sub.body.req_key === 'realman_avatar_picture_omni20_cv' && sub.body.enable_watermark === false, 'the video request is signed, names the OmniHuman 2.0 service and asks for no watermark');
 ok(/^https:\/\/scenly\.test\/pp\/.+\.png$/.test(sub?.body.image_urls?.[0] || ''), 'the photo goes as a public link: ' + sub?.body.image_urls?.[0]);
 ok(/^https:\/\/scenly\.test\/pa\/.+\.mp3$/.test(sub?.body.audio_url || ''), 'the voice goes as a public link: ' + sub?.body.audio_url);
 ok(!sub?.body.prompt, 'the script is spoken, not sent as a movement note');
